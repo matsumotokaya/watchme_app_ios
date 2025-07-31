@@ -348,6 +348,29 @@ struct HomeView: View {
 5. **集計保存** → `vibe_whisper_summary`テーブルに日次サマリーを保存
 6. **データ取得** → アプリからデバイスIDで分析結果を照会
 
+### 高速データ取得（RPC実装）
+
+本アプリケーションは、Supabaseのデータベース関数（RPC）を使用して、複数テーブルからのデータ取得を最適化しています。
+
+1. **統合データ取得関数 `get_dashboard_data`**
+   - 単一のRPC呼び出しで全グラフデータを取得
+   - vibe_whisper_summary、behavior_summary、emotion_opensmile_summary、subjectsの4テーブルを一括取得
+   - ネットワークリクエストが5回以上から1回に削減
+
+2. **SupabaseDataManagerの実装**
+   ```swift
+   // RPCを使った高速データ取得
+   func fetchAllReports(deviceId: String, date: Date) async {
+       let params = ["p_device_id": deviceId, "p_date": dateString]
+       let response: [DashboardData] = try await supabase.rpc("get_dashboard_data", params: params).execute().value
+   }
+   ```
+
+3. **パフォーマンスへの影響**
+   - ダッシュボード表示の遅延を大幅に短縮
+   - データの一貫性を保証（全データが同じタイミングで取得）
+   - ネットワーク通信の効率化によりバッテリー消費も改善
+
 ### 心理グラフ（Vibe Graph）の実装
 
 1. **HomeView（メインレポート画面）**
@@ -358,7 +381,7 @@ struct HomeView: View {
    - 時間帯別感情推移グラフ
 
 2. **SupabaseDataManager**
-   - vibe_whisper_summaryテーブルからデータ取得
+   - RPC関数経由でvibe_whisper_summaryテーブルからデータ取得
    - デバイスIDと日付を指定してデータを取得
    - リアルタイムデータ更新
 

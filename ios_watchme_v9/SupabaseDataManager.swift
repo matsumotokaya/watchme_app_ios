@@ -151,48 +151,57 @@ class SupabaseDataManager: ObservableObject {
         errorMessage = nil
     }
     
-    /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
+    /// 統合データフェッチメソッド - RPCを使ってすべてのグラフデータを一括で取得（高速版）
     func fetchAllReports(deviceId: String, date: Date) async {
         await MainActor.run { [weak self] in
             self?.isLoading = true
             self?.errorMessage = nil
+            // データをクリアして、古い情報が残らないようにする
+            self?.dailyReport = nil
+            self?.dailyBehaviorReport = nil
+            self?.dailyEmotionReport = nil
+            self?.subject = nil
         }
-        
+
         let dateString = dateFormatter.string(from: date)
-        print("🔄 Fetching all reports for device: \(deviceId), date: \(dateString)")
-        
-        // 並行してすべてのレポートを取得
-        await withTaskGroup(of: Void.self) { group in
-            // Vibeレポートの取得
-            group.addTask { [weak self] in
-                await self?.fetchDailyReport(for: deviceId, date: date)
-            }
-            
-            // 行動レポートの取得
-            group.addTask { [weak self] in
-                let report = await self?.fetchBehaviorReport(deviceId: deviceId, date: dateString)
+        print("🚀 Fetching all reports via RPC for device: \(deviceId), date: \(dateString)")
+
+        do {
+            // RPCを呼び出す
+            let params = ["p_device_id": deviceId, "p_date": dateString]
+            let response: [DashboardData] = try await supabase.rpc("get_dashboard_data", params: params).execute().value
+
+            // レスポンスを処理
+            if let data = response.first {
                 await MainActor.run { [weak self] in
-                    self?.dailyBehaviorReport = report
+                    self?.dailyReport = data.vibe_report
+                    self?.dailyBehaviorReport = data.behavior_report
+                    self?.dailyEmotionReport = data.emotion_report
+                    self?.subject = data.subject_info
+
+                    print("✅ All reports fetched successfully via RPC")
+                    if data.vibe_report == nil { print("   - Vibe report: Not found") }
+                    if data.behavior_report == nil { print("   - Behavior report: Not found") }
+                    if data.emotion_report == nil { print("   - Emotion report: Not found") }
+                    if data.subject_info == nil { print("   - Subject info: Not found") }
                 }
+            } else {
+                print("⚠️ RPC returned no data.")
             }
-            
-            // 感情レポートの取得
-            group.addTask { [weak self] in
-                let report = await self?.fetchEmotionReport(deviceId: deviceId, date: dateString)
-                await MainActor.run { [weak self] in
-                    self?.dailyEmotionReport = report
+
+        } catch {
+            print("❌ RPC fetch error: \(error)")
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "データの一括取得に失敗しました: \(error.localizedDescription)"
+                if let dbError = error as? PostgrestError {
+                    print("   - コード: \(dbError.code ?? "不明")")
+                    print("   - メッセージ: \(dbError.message)")
                 }
-            }
-            
-            // 観測対象情報の取得（デバイスに紐づくsubject_idを使用）
-            group.addTask { [weak self] in
-                await self?.fetchSubjectForDevice(deviceId: deviceId)
             }
         }
-        
+
         await MainActor.run { [weak self] in
             self?.isLoading = false
-            print("✅ All reports fetching completed")
         }
     }
     
@@ -484,6 +493,15 @@ class SupabaseDataManager: ObservableObject {
         
         print("✅ Subject updated successfully: \(subjectId)")
     }
+}
+
+// MARK: - RPC Response Models
+// RPCからのレスポンスをデコードするための構造体
+struct DashboardData: Decodable {
+    let vibe_report: DailyVibeReport?
+    let behavior_report: BehaviorReport?
+    let emotion_report: EmotionReport?
+    let subject_info: Subject?
 }
 
 // MARK: - Error Types

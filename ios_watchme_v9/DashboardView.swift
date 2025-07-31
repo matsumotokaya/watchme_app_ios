@@ -8,12 +8,30 @@
 import SwiftUI
 
 struct DashboardView: View {
+    // ViewModelをViewのStateとして所有
+    @StateObject private var viewModel: DashboardViewModel
+    
+    // 認証と画面遷移のためのプロパティ
+    @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
-    @Binding var selectedDate: Date
     @State private var showSubjectRegistration = false
     @State private var showSubjectEdit = false
+    
+    // 外部から渡される日付のBinding
+    @Binding var selectedDate: Date
+    
+    // イニシャライザでViewModelを初期化
+    init(selectedDate: Binding<Date>) {
+        self._selectedDate = selectedDate
+        // _viewModelの初期化は、依存関係が確定してから行う
+        // ここでは仮のインスタンスを生成し、onAppearで本物をセットする
+        self._viewModel = StateObject(wrappedValue: DashboardViewModel(
+            dataManager: SupabaseDataManager(), // 仮
+            deviceManager: DeviceManager(),     // 仮
+            initialDate: selectedDate.wrappedValue
+        ))
+    }
     
     var body: some View {
         ScrollView {
@@ -41,19 +59,20 @@ struct DashboardView: View {
         }
         .background(Color(.systemGray6))
         .onAppear {
-            Task {
-                await fetchAllReports()
-            }
+            // Viewが表示されるときに、本物の依存関係をViewModelに渡す
+            viewModel.connect(
+                dataManager: dataManager,
+                deviceManager: deviceManager
+            )
+            viewModel.onAppear()
         }
         .onChange(of: selectedDate) { oldValue, newValue in
-            Task {
-                await fetchAllReports()
-            }
+            // Viewの状態変更をViewModelに伝える
+            viewModel.selectedDate = newValue
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-            Task {
-                await fetchAllReports()
-            }
+            // Viewの状態変更をViewModelに伝える
+            viewModel.selectedDeviceID = newValue
         }
         .sheet(isPresented: $showSubjectRegistration) {
             if let deviceID = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
@@ -320,11 +339,7 @@ struct DashboardView: View {
         }
     }
     
-    private func fetchAllReports() async {
-        if let deviceID = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
-            await dataManager.fetchAllReports(deviceId: deviceID, date: selectedDate)
-        }
-    }
+    // fetchAllReportsメソッドはViewModelに移動したので削除
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
