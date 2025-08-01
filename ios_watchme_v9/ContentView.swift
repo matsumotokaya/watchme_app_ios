@@ -32,8 +32,9 @@ struct ContentView: View {
     // TabViewの選択状態を管理（ダッシュボードから開始）
     @State private var selectedTab = 0
     
-    // DashboardViewModelを生成・管理（body内で初期化）
+    // DashboardViewModelを生成・管理
     @State private var dashboardViewModel: DashboardViewModel?
+    @State private var isInitialized = false
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -145,19 +146,9 @@ struct ContentView: View {
                     // ダッシュボードタブ
                     NavigationView {
                         if let viewModel = dashboardViewModel {
-                            DashboardView(viewModel: viewModel)
+                            DashboardView(viewModel: viewModel, selectedTab: $selectedTab)
                         } else {
                             ProgressView("初期化中...")
-                                .onAppear {
-                                    // DashboardViewModelを初期化
-                                    if dashboardViewModel == nil {
-                                        dashboardViewModel = DashboardViewModel(
-                                            dataManager: dataManager,
-                                            deviceManager: deviceManager,
-                                            initialDate: selectedDate
-                                        )
-                                    }
-                                }
                         }
                     }
                     .navigationViewStyle(StackNavigationViewStyle())
@@ -321,11 +312,13 @@ struct ContentView: View {
             }
             // selectedDate または selectedDeviceID が変更されたときにデータをフェッチ
             .onChange(of: selectedDate) { oldValue, newValue in
-                fetchReports()
-                // DashboardViewModelにも日付変更を通知
+                // DashboardViewModelに日付変更を通知（DashboardViewModelが独自にデータ取得）
                 dashboardViewModel?.updateSelectedDate(newValue)
+                // 他のグラフビュー用にデータをフェッチ
+                fetchReports()
             }
             .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
+                // 他のグラフビュー用にデータをフェッチ
                 fetchReports()
             }
             .onChange(of: selectedTab) { oldValue, newValue in
@@ -336,17 +329,21 @@ struct ContentView: View {
                 }
             }
             .onAppear {
-                initializeNetworkManager()
-                // DashboardViewModelを初期化
-                if dashboardViewModel == nil {
+                // 初期化は一度だけ行う
+                if !isInitialized {
+                    isInitialized = true
+                    initializeNetworkManager()
+                    
+                    // DashboardViewModelを初期化
                     dashboardViewModel = DashboardViewModel(
                         dataManager: dataManager,
                         deviceManager: deviceManager,
                         initialDate: selectedDate
                     )
+                    
+                    // 初回のデータフェッチ
+                    fetchReports()
                 }
-                // アプリ起動時またはViewが表示されたときにデータをフェッチ
-                fetchReports()
             }
             }
         } else {

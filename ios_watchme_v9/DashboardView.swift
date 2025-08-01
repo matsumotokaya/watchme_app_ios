@@ -16,6 +16,9 @@ struct DashboardView: View {
     @State private var showSubjectRegistration = false
     @State private var showSubjectEdit = false
     
+    // タブ遷移のためのBinding
+    @Binding var selectedTab: Int
+    
     // selectedDateはViewModelが管理するのでBindingは不要
     
     var body: some View {
@@ -104,6 +107,10 @@ struct DashboardView: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .onTapGesture {
+            // 心理グラフタブに遷移
+            selectedTab = 1
+        }
     }
     
     @ViewBuilder
@@ -184,6 +191,10 @@ struct DashboardView: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .onTapGesture {
+            // 行動グラフタブに遷移
+            selectedTab = 2
+        }
     }
     
     @ViewBuilder
@@ -255,6 +266,10 @@ struct DashboardView: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .onTapGesture {
+            // 感情グラフタブに遷移
+            selectedTab = 3
+        }
     }
     
     @ViewBuilder
