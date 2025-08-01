@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Charts
 
 struct HomeView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
@@ -128,36 +129,9 @@ struct HomeView: View {
                             }
                         }
                         
-                        // 時間帯別グラフ (簡易版)
+                        // 時間帯別グラフ (折れ線グラフ版)
                         if let vibeScores = report.vibeScores {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("時間帯別の推移")
-                                    .font(.headline)
-                                    .padding(.horizontal)
-                                
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 4) {
-                                        ForEach(Array(vibeScores.enumerated()), id: \.offset) { index, score in
-                                            if let scoreValue = score {
-                                                VStack {
-                                                    Rectangle()
-                                                        .fill(report.scoreColor(for: scoreValue))
-                                                        .frame(width: 20, height: CGFloat(scoreValue * 10))
-                                                    Text("\(index/2)")
-                                                        .font(.caption2)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                                .frame(height: 120, alignment: .bottom)
-                                            }
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                                .padding(.vertical, 8)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                            }
+                            VibeLineChartView(vibeScores: vibeScores, vibeChanges: report.vibeChanges)
                         }
                     }
                 } else if !dataManager.isLoading && dataManager.errorMessage == nil {
