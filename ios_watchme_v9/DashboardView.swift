@@ -8,30 +8,15 @@
 import SwiftUI
 
 struct DashboardView: View {
-    // ViewModelをViewのStateとして所有
-    @StateObject private var viewModel: DashboardViewModel
+    // 親Viewから渡されるViewModelを監視するだけ
+    @ObservedObject var viewModel: DashboardViewModel
     
     // 認証と画面遷移のためのプロパティ
     @EnvironmentObject var authManager: SupabaseAuthManager
-    @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var deviceManager: DeviceManager
     @State private var showSubjectRegistration = false
     @State private var showSubjectEdit = false
     
-    // 外部から渡される日付のBinding
-    @Binding var selectedDate: Date
-    
-    // イニシャライザでViewModelを初期化
-    init(selectedDate: Binding<Date>) {
-        self._selectedDate = selectedDate
-        // _viewModelの初期化は、依存関係が確定してから行う
-        // ここでは仮のインスタンスを生成し、onAppearで本物をセットする
-        self._viewModel = StateObject(wrappedValue: DashboardViewModel(
-            dataManager: SupabaseDataManager(), // 仮
-            deviceManager: DeviceManager(),     // 仮
-            initialDate: selectedDate.wrappedValue
-        ))
-    }
+    // selectedDateはViewModelが管理するのでBindingは不要
     
     var body: some View {
         ScrollView {
@@ -46,7 +31,7 @@ struct DashboardView: View {
                 emotionGraphCard
                 
                 // 観測対象情報
-                if let subject = dataManager.subject {
+                if let subject = viewModel.dataManager.subject {
                     observationTargetCard(subject)
                 } else {
                     noObservationTargetCard()
@@ -59,43 +44,31 @@ struct DashboardView: View {
         }
         .background(Color(.systemGray6))
         .onAppear {
-            // Viewが表示されるときに、本物の依存関係をViewModelに渡す
-            viewModel.connect(
-                dataManager: dataManager,
-                deviceManager: deviceManager
-            )
             viewModel.onAppear()
         }
-        .onChange(of: selectedDate) { oldValue, newValue in
-            // Viewの状態変更をViewModelに伝える
-            viewModel.selectedDate = newValue
-        }
-        .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-            // Viewの状態変更をViewModelに伝える
-            viewModel.selectedDeviceID = newValue
-        }
+        // .onChangeはViewModel内部で処理するので不要
         .sheet(isPresented: $showSubjectRegistration) {
-            if let deviceID = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
+            if let deviceID = viewModel.deviceManager.selectedDeviceID ?? viewModel.deviceManager.localDeviceIdentifier {
                 SubjectRegistrationView(
                     deviceID: deviceID, 
                     isPresented: $showSubjectRegistration,
                     editingSubject: nil
                 )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
+                .environmentObject(viewModel.dataManager)
+                .environmentObject(viewModel.deviceManager)
                 .environmentObject(authManager)
             }
         }
         .sheet(isPresented: $showSubjectEdit) {
-            if let deviceID = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier,
-               let subject = dataManager.subject {
+            if let deviceID = viewModel.deviceManager.selectedDeviceID ?? viewModel.deviceManager.localDeviceIdentifier,
+               let subject = viewModel.dataManager.subject {
                 SubjectRegistrationView(
                     deviceID: deviceID,
                     isPresented: $showSubjectEdit,
                     editingSubject: subject
                 )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
+                .environmentObject(viewModel.dataManager)
+                .environmentObject(viewModel.deviceManager)
                 .environmentObject(authManager)
             }
         }
@@ -104,7 +77,10 @@ struct DashboardView: View {
     // MARK: - Subviews
     
     private var vibeGraphCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // viewModelが管理しているdataManagerを使う
+        let dataManager = viewModel.dataManager
+        
+        return VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "brain.head.profile")
                     .font(.title2)
@@ -119,7 +95,7 @@ struct DashboardView: View {
             } else {
                 GraphEmptyStateView(
                     graphType: .vibe,
-                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isDeviceLinked: !viewModel.deviceManager.userDevices.isEmpty,
                     isCompact: true
                 )
             }
@@ -181,7 +157,10 @@ struct DashboardView: View {
     }
     
     private var behaviorGraphCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // viewModelが管理しているdataManagerを使う
+        let dataManager = viewModel.dataManager
+        
+        return VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "figure.walk")
                     .font(.title2)
@@ -196,7 +175,7 @@ struct DashboardView: View {
             } else {
                 GraphEmptyStateView(
                     graphType: .behavior,
-                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isDeviceLinked: !viewModel.deviceManager.userDevices.isEmpty,
                     isCompact: true
                 )
             }
@@ -249,7 +228,10 @@ struct DashboardView: View {
     }
     
     private var emotionGraphCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // viewModelが管理しているdataManagerを使う
+        let dataManager = viewModel.dataManager
+        
+        return VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "heart.fill")
                     .font(.title2)
@@ -264,7 +246,7 @@ struct DashboardView: View {
             } else {
                 GraphEmptyStateView(
                     graphType: .emotion,
-                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isDeviceLinked: !viewModel.deviceManager.userDevices.isEmpty,
                     isCompact: true
                 )
             }

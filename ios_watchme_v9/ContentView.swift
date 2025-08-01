@@ -32,6 +32,9 @@ struct ContentView: View {
     // TabViewの選択状態を管理（ダッシュボードから開始）
     @State private var selectedTab = 0
     
+    // DashboardViewModelを生成・管理（body内で初期化）
+    @State private var dashboardViewModel: DashboardViewModel?
+    
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -141,7 +144,21 @@ struct ContentView: View {
                 TabView(selection: $selectedTab) {
                     // ダッシュボードタブ
                     NavigationView {
-                        DashboardView(selectedDate: $selectedDate)
+                        if let viewModel = dashboardViewModel {
+                            DashboardView(viewModel: viewModel)
+                        } else {
+                            ProgressView("初期化中...")
+                                .onAppear {
+                                    // DashboardViewModelを初期化
+                                    if dashboardViewModel == nil {
+                                        dashboardViewModel = DashboardViewModel(
+                                            dataManager: dataManager,
+                                            deviceManager: deviceManager,
+                                            initialDate: selectedDate
+                                        )
+                                    }
+                                }
+                        }
                     }
                     .navigationViewStyle(StackNavigationViewStyle())
                     .tabItem {
@@ -305,6 +322,8 @@ struct ContentView: View {
             // selectedDate または selectedDeviceID が変更されたときにデータをフェッチ
             .onChange(of: selectedDate) { oldValue, newValue in
                 fetchReports()
+                // DashboardViewModelにも日付変更を通知
+                dashboardViewModel?.updateSelectedDate(newValue)
             }
             .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
                 fetchReports()
@@ -318,6 +337,14 @@ struct ContentView: View {
             }
             .onAppear {
                 initializeNetworkManager()
+                // DashboardViewModelを初期化
+                if dashboardViewModel == nil {
+                    dashboardViewModel = DashboardViewModel(
+                        dataManager: dataManager,
+                        deviceManager: deviceManager,
+                        initialDate: selectedDate
+                    )
+                }
                 // アプリ起動時またはViewが表示されたときにデータをフェッチ
                 fetchReports()
             }
@@ -807,7 +834,13 @@ struct UserInfoView: View {
     }
     
     private func uploadAvatar(image: UIImage) {
-        guard let userId = authManager.currentUser?.id else { return }
+        guard let userId = authManager.currentUser?.id else { 
+            print("❌ User ID not found")
+            return 
+        }
+        
+        print("🚀 Starting avatar upload for user: \(userId)")
+        print("📐 Image size: \(image.size), Scale: \(image.scale)")
         
         isUploadingAvatar = true
         avatarUploadError = nil
@@ -815,8 +848,7 @@ struct UserInfoView: View {
         
         Task {
             do {
-                // ⚠️ ペンディング: アバターアップロード専用APIの実装待ち
-                // 現在はローカルファイルシステムに保存される暫定実装
+                // ✅ Avatar Uploader APIを使用してS3にアップロード
                 let url = try await AWSManager.shared.uploadAvatar(
                     image: image,
                     type: "users",
@@ -827,11 +859,17 @@ struct UserInfoView: View {
                     isUploadingAvatar = false
                     // AvatarViewを強制的に更新
                     NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
+                    print("✅ アバターアップロード成功: \(url)")
+                    
+                    // 成功メッセージを表示（オプション）
+                    // TODO: アラートやトーストで成功を通知
                 }
             } catch {
                 await MainActor.run {
                     isUploadingAvatar = false
                     avatarUploadError = error.localizedDescription
+                    print("❌ アバターアップロードエラー: \(error)")
+                    print("📝 Error details: \(error.localizedDescription)")
                 }
             }
         }
@@ -944,7 +982,7 @@ struct InfoRowTwoLine: View {
 struct AvatarView: View {
     let userId: String?
     let size: CGFloat = 80
-    let useS3: Bool = true // ⚠️ ペンディング: API実装後はS3のURLを使用予定
+    let useS3: Bool = true // ✅ Avatar Uploader APIを使用してS3に保存
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var avatarUrl: URL?
     @State private var isLoadingAvatar = true
@@ -1020,19 +1058,11 @@ struct AvatarView: View {
             isLoadingAvatar = true
             
             if useS3 {
-                // 暫定実装: ローカルファイルから読み込み
-                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                let fileURL = documentsPath.appendingPathComponent("users/\(userId)/avatar.jpg")
-                
-                if FileManager.default.fileExists(atPath: fileURL.path) {
-                    self.avatarUrl = fileURL
-                    print("📁 Loading local avatar from: \(fileURL)")
-                } else {
-                    // S3のURLを設定（実際には存在しない）
-                    let baseURL = AWSManager.shared.getAvatarURL(type: "users", id: userId)
-                    let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
-                    self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
-                }
+                // S3のURLを設定（Avatar Uploader API経由でアップロード済み）
+                let baseURL = AWSManager.shared.getAvatarURL(type: "users", id: userId)
+                let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
+                self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
+                print("🌐 Loading avatar from S3: \(self.avatarUrl?.absoluteString ?? "nil")")
             } else {
                 // Supabaseから取得（既存の実装）
                 self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)

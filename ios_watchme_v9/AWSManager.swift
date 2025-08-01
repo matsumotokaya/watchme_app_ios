@@ -12,10 +12,9 @@ import CryptoKit
 // MARK: - Avatar Upload Manager
 /// アバター画像のアップロードを管理するクラス
 /// 
-/// ⚠️ 現在ペンディング状態 ⚠️
-/// - アバターアップロード専用APIの実装待ち
-/// - APIエンドポイントが提供され次第、実装を更新予定
-/// - 現在はローカルファイルシステムに保存する暫定実装
+/// ✅ Avatar Uploader APIを使用した実装
+/// - エンドポイント: https://api.hey-watch.me/avatar/
+/// - S3への直接アップロードではなく、サーバー経由での安全なアップロード
 ///
 @MainActor
 class AWSManager: ObservableObject {
@@ -23,19 +22,14 @@ class AWSManager: ObservableObject {
     // MARK: - Properties
     static let shared = AWSManager()
     
-    // S3設定（環境変数または設定ファイルから読み込むことを推奨）
-    private let bucketName = "watchme-avatars"
-    private let region = "ap-northeast-1"  // 東京リージョン
-    private let s3Endpoint: String
-    
-    // AWS認証情報（本番環境では安全な方法で管理すること）
-    // TODO: これらの値を環境変数やKeychain、またはサーバー経由で取得するように変更
-    private let accessKeyId = "YOUR_ACCESS_KEY_ID"
-    private let secretAccessKey = "YOUR_SECRET_ACCESS_KEY"
+    // 現在使用するAPIベースURL
+    private var currentAPIBaseURL: String {
+        return APIConfiguration.AvatarUploader.currentURL
+    }
     
     // MARK: - Initialization
     private init() {
-        self.s3Endpoint = "https://\(bucketName).s3.\(region).amazonaws.com"
+        // 初期化処理（必要に応じて）
     }
     
     // MARK: - Public Methods
@@ -44,70 +38,104 @@ class AWSManager: ObservableObject {
     /// - Parameters:
     ///   - image: アップロードする画像
     ///   - type: アバターのタイプ（"users" または "subjects"）
-    ///   - id: ユーザーIDまたはサブジェクトID
+    ///   - id: ユーザーIDまたはサブジェクトID（UUID形式必須）
     /// - Returns: アップロードされた画像のURL
     func uploadAvatar(image: UIImage, type: String, id: String) async throws -> URL {
         print("📤 Starting avatar upload for \(type)/\(id)")
         
-        // ========================================
-        // ⚠️ ペンディング実装 ⚠️
-        // 
-        // TODO: アバターアップロード専用APIが実装され次第、以下の処理に置き換える
-        // 
-        // 想定されるAPI仕様:
-        // - エンドポイント: POST /api/avatar/upload
-        // - リクエスト: multipart/form-data
-        //   - file: 画像ファイル
-        //   - type: "users" or "subjects"
-        //   - id: ユーザーIDまたはサブジェクトID
-        // - レスポンス: { url: "https://..." }
-        //
-        // 実装例:
-        // ```swift
-        // let endpoint = "https://api.hey-watch.me/avatar/upload"
-        // var request = URLRequest(url: URL(string: endpoint)!)
-        // request.httpMethod = "POST"
-        // 
-        // let boundary = UUID().uuidString
-        // request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        // 
-        // // multipart/form-dataのボディを構築
-        // var body = Data()
-        // // ... (実装詳細)
-        // 
-        // let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-        // let result = try JSONDecoder().decode(AvatarUploadResponse.self, from: data)
-        // return URL(string: result.url)!
-        // ```
-        // ========================================
+        // UUIDの形式チェック
+        guard UUID(uuidString: id) != nil else {
+            throw AWSError.invalidID("IDはUUID形式である必要があります: \(id)")
+        }
         
         // 画像をJPEGに変換（品質80%）
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             throw AWSError.imageConversionFailed
         }
         
-        // ========================================
-        // 暫定実装: ローカルファイルシステムに保存
-        // API実装完了後は削除予定
-        // ========================================
-        let fileName = "avatar.jpg"
-        let key = "\(type)/\(id)/\(fileName)"
+        // APIエンドポイントURL
+        let endpoint = "\(currentAPIBaseURL)/v1/\(type)/\(id)/avatar"
+        guard let url = URL(string: endpoint) else {
+            throw AWSError.invalidURL
+        }
         
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let typePath = documentsPath.appendingPathComponent(type)
-        let idPath = typePath.appendingPathComponent(id)
+        // multipart/form-dataのboundary
+        let boundary = UUID().uuidString
         
-        // ディレクトリを作成
-        try? FileManager.default.createDirectory(at: idPath, withIntermediateDirectories: true)
+        // リクエスト作成
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
-        // ファイルに保存
-        let fileURL = idPath.appendingPathComponent(fileName)
-        try imageData.write(to: fileURL)
+        // 認証トークンがある場合は追加（Supabaseトークンなど）
+        // TODO: AuthManagerからトークンを取得して設定
+        // if let token = await AuthManager.shared.getAccessToken() {
+        //     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // }
         
-        print("⚠️ PENDING: Avatar saved locally (API not yet implemented): \(fileURL)")
+        // multipart/form-dataのボディを構築
+        var body = Data()
         
-        // S3のURLフォーマットで返す（実際にはアップロードしていない）
-        return URL(string: "\(s3Endpoint)/\(key)")!
+        // avatar_typeパラメータ（"main"または"sub"）
+        let avatarType = "main"  // デフォルトは"main"
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"avatar_type\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(avatarType)\r\n".data(using: .utf8)!)
+        
+        // 画像ファイル
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        
+        // 終端
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        // リクエスト実行
+        do {
+            let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AWSError.invalidResponse
+            }
+            
+            print("📡 Response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                // レスポンスJSONをパース
+                struct AvatarUploadResponse: Codable {
+                    let avatarUrl: String
+                }
+                
+                let decoder = JSONDecoder()
+                let result = try decoder.decode(AvatarUploadResponse.self, from: data)
+                
+                guard let avatarURL = URL(string: result.avatarUrl) else {
+                    throw AWSError.invalidURL
+                }
+                
+                print("✅ Avatar uploaded successfully: \(avatarURL)")
+                return avatarURL
+                
+            } else if httpResponse.statusCode == 422 {
+                // バリデーションエラー
+                if let errorString = String(data: data, encoding: .utf8) {
+                    print("❌ Validation error: \(errorString)")
+                    throw AWSError.validationError(errorString)
+                }
+                throw AWSError.uploadFailed(statusCode: httpResponse.statusCode)
+            } else {
+                // その他のエラー
+                if let errorString = String(data: data, encoding: .utf8) {
+                    print("❌ Upload error: \(errorString)")
+                }
+                throw AWSError.uploadFailed(statusCode: httpResponse.statusCode)
+            }
+        } catch {
+            print("❌ Network error: \(error)")
+            throw AWSError.networkError(error)
+        }
     }
     
     /// アバター画像のURLを取得
@@ -116,59 +144,24 @@ class AWSManager: ObservableObject {
     ///   - id: ユーザーIDまたはサブジェクトID
     /// - Returns: アバター画像のURL
     func getAvatarURL(type: String, id: String) -> URL {
-        let key = "\(type)/\(id)/avatar.jpg"
-        return URL(string: "\(s3Endpoint)/\(key)")!
+        // S3の実際のURL形式
+        // 注意: us-east-1形式のURLが返される（APIレスポンスと同じ形式）
+        // 実際はap-southeast-2にリダイレクトされる
+        let s3URL = "https://watchme-vault.s3.us-east-1.amazonaws.com/\(type)/\(id)/avatar.jpg"
+        print("🔗 Avatar URL: \(s3URL)")
+        return URL(string: s3URL)!
     }
     
-    // MARK: - Private Methods
-    
-    /// S3に直接アップロード（AWS SDK不使用）
-    private func uploadToS3(data: Data, key: String, contentType: String) async throws -> URL {
-        let url = URL(string: "\(s3Endpoint)/\(key)")!
-        
-        // リクエストを作成
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        request.setValue("public-read", forHTTPHeaderField: "x-amz-acl")
-        
-        // AWS Signature V4を生成（簡略版）
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-        dateFormatter.timeZone = TimeZone(identifier: "UTC")
-        let timestamp = dateFormatter.string(from: Date())
-        
-        request.setValue(timestamp, forHTTPHeaderField: "x-amz-date")
-        
-        // TODO: 実際のAWS Signature V4の実装が必要
-        // ここでは簡略化のため、認証なしでアップロードすることを想定
-        // 本番環境では、サーバー経由でのアップロードや、
-        // 一時的な認証トークンの使用を検討してください
-        
-        // アップロード実行
-        do {
-            let (_, response) = try await URLSession.shared.upload(for: request, from: data)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AWSError.invalidResponse
-            }
-            
-            if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-                return url
-            } else {
-                throw AWSError.uploadFailed(statusCode: httpResponse.statusCode)
-            }
-        } catch {
-            throw AWSError.networkError(error)
-        }
-    }
 }
 
 // MARK: - Error Types
 enum AWSError: Error, LocalizedError {
     case imageConversionFailed
     case invalidResponse
+    case invalidURL
+    case invalidID(String)
     case uploadFailed(statusCode: Int)
+    case validationError(String)
     case networkError(Error)
     
     var errorDescription: String? {
@@ -177,39 +170,45 @@ enum AWSError: Error, LocalizedError {
             return "画像の変換に失敗しました"
         case .invalidResponse:
             return "無効なレスポンスです"
+        case .invalidURL:
+            return "無効なURLです"
+        case .invalidID(let message):
+            return message
         case .uploadFailed(let statusCode):
             return "アップロードに失敗しました (ステータス: \(statusCode))"
+        case .validationError(let message):
+            return "検証エラー: \(message)"
         case .networkError(let error):
             return "ネットワークエラー: \(error.localizedDescription)"
         }
     }
 }
 
-// MARK: - 暫定的な実装の注意事項
+// MARK: - Avatar Uploader API実装の注意事項
 /*
- 重要: このAWSManagerは、デモンストレーション用の簡略化された実装です。
+ ✅ このAWSManagerは、Avatar Uploader APIを使用した実装です。
  
- 本番環境での実装には以下の対応が必要です：
+ 実装の特徴：
  
- 1. AWS認証情報の安全な管理
-    - Keychainに保存
-    - サーバー経由で一時的な認証トークンを取得
-    - AWS CognitoやSTSを使用
+ 1. サーバー経由の安全なアップロード
+    - AWSの認証情報はクライアントに保持しない
+    - サーバー側でS3へのアップロードを処理
  
- 2. AWS Signature V4の完全な実装
-    - 現在の実装では認証が含まれていません
-    - AWS SDK for iOSの使用を推奨
+ 2. UUID形式のID必須
+    - user_idおよびsubject_idはUUID形式である必要がある
+    - 形式チェックを実装済み
  
- 3. エラーハンドリングの強化
-    - リトライロジック
-    - より詳細なエラー情報
+ 3. multipart/form-dataでのアップロード
+    - fileとavatar_typeをパラメータとして送信
+    - 画像はJPEG形式（品質80%）に変換
  
- 4. 画像の最適化
-    - 複数サイズの生成（サムネイル等）
-    - WebP形式への変換
+ 4. 開発/本番環境の切り替え
+    - currentAPIBaseURLプロパティで管理
+    - 本番Nginx設定完了後は切り替えが必要
  
- 代替案として、以下の方法も検討してください：
- - サーバー経由でのアップロード（サーバーがS3にアップロード）
- - Supabase Storageの継続使用
- - CloudinaryやImgixなどの画像専用CDNサービス
+ 今後の改善点：
+ - Supabase認証トークンの追加
+ - リトライロジックの実装
+ - 画像のリサイズ・最適化処理
+ - アバタータイプ（main/sub）の選択機能
  */

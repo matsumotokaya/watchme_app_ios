@@ -115,8 +115,20 @@ struct AvatarPickerView: View {
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 150, height: 150)
                             .clipShape(Circle())
-                    case .failure(_), .empty:
+                    case .failure(let error):
+                        // エラーの詳細をログ出力
+                        let _ = {
+                            print("❌ Failed to load avatar image: \(error)")
+                            print("📍 URL: \(url)")
+                        }()
                         defaultAvatar
+                    case .empty:
+                        // 読み込み中
+                        ZStack {
+                            defaultAvatar
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        }
                     @unknown default:
                         defaultAvatar
                     }
@@ -151,20 +163,33 @@ struct AvatarPickerView: View {
     private func loadImage(from item: PhotosPickerItem?) async {
         guard let item = item else { return }
         
+        print("📸 Loading image from PhotosPickerItem")
+        
         await MainActor.run {
             isProcessing = true
         }
         
         do {
-            if let data = try await item.loadTransferable(type: Data.self),
-               let uiImage = UIImage(data: data) {
-                await MainActor.run {
-                    self.selectedImage = uiImage
-                    self.isProcessing = false
-                    self.showingPhotoPicker = false
-                    // 少し遅延させてからトリミング画面を表示
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.showingImageCropper = true
+            // 画像データを読み込む
+            if let data = try await item.loadTransferable(type: Data.self) {
+                print("📊 Image data loaded: \(data.count) bytes")
+                
+                if let uiImage = UIImage(data: data) {
+                    print("✅ UIImage created successfully - Size: \(uiImage.size), Scale: \(uiImage.scale)")
+                    
+                    await MainActor.run {
+                        self.selectedImage = uiImage
+                        self.isProcessing = false
+                        self.showingPhotoPicker = false
+                        // 少し遅延させてからトリミング画面を表示
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            self.showingImageCropper = true
+                        }
+                    }
+                } else {
+                    print("❌ Failed to create UIImage from data")
+                    await MainActor.run {
+                        isProcessing = false
                     }
                 }
             } else {
@@ -292,49 +317,62 @@ struct ImageCropperView: View {
     
     private func cropImage() -> UIImage? {
         let targetSize: CGFloat = 300
-        let scale = UIScreen.main.scale
+        
+        // デバッグログ
+        print("🖼️ Cropping image - Original size: \(image.size), Scale: \(scale), Offset: \(offset)")
         
         // 画像の実際のサイズを取得
         let imageSize = image.size
         
-        // スケールを考慮した最小倍率を計算（画像が300x300の枠を完全に覆うように）
+        // 画像が小さすぎる場合のチェック
+        guard imageSize.width > 0 && imageSize.height > 0 else {
+            print("❌ Invalid image size: \(imageSize)")
+            return nil
+        }
+        
+        // アスペクト比を保持しながら、300x300の枠を完全に覆う最小スケール
         let minScale = max(targetSize / imageSize.width, targetSize / imageSize.height)
-        let finalScale = max(self.scale, minScale)
+        let finalScale = max(self.scale * minScale, minScale)
         
         // スケール後の画像サイズ
         let scaledWidth = imageSize.width * finalScale
         let scaledHeight = imageSize.height * finalScale
         
-        // オフセットを考慮したトリミング領域の計算
-        let cropX = (scaledWidth - targetSize) / 2 - offset.width
-        let cropY = (scaledHeight - targetSize) / 2 - offset.height
+        print("📏 Scaled size: \(scaledWidth) x \(scaledHeight), Final scale: \(finalScale)")
         
-        // トリミング領域が画像の範囲内に収まるように調整
-        let finalCropX = max(0, min(cropX, scaledWidth - targetSize))
-        let finalCropY = max(0, min(cropY, scaledHeight - targetSize))
+        // UIGraphicsで画像をレンダリング
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: targetSize, height: targetSize))
         
-        // UIGraphicsで高品質な画像処理
-        UIGraphicsBeginImageContextWithOptions(CGSize(width: targetSize, height: targetSize), true, scale)
-        defer { UIGraphicsEndImageContext() }
+        let croppedImage = renderer.image { context in
+            // 背景を透明にする（白ではなく）
+            context.cgContext.clear(CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+            
+            // クリッピングマスクを設定
+            context.cgContext.addRect(CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+            context.cgContext.clip()
+            
+            // 画像の中心を計算
+            let centerX = targetSize / 2
+            let centerY = targetSize / 2
+            
+            // オフセットを適用した描画位置
+            let drawX = centerX - (scaledWidth / 2) + offset.width
+            let drawY = centerY - (scaledHeight / 2) + offset.height
+            
+            // 画像を描画
+            let drawRect = CGRect(
+                x: drawX,
+                y: drawY,
+                width: scaledWidth,
+                height: scaledHeight
+            )
+            
+            print("🎯 Draw rect: \(drawRect)")
+            
+            image.draw(in: drawRect)
+        }
         
-        guard let context = UIGraphicsGetCurrentContext() else { return nil }
-        
-        // 背景を白で塗りつぶす
-        context.setFillColor(UIColor.white.cgColor)
-        context.fill(CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
-        
-        // 画像を描画
-        let drawRect = CGRect(
-            x: -finalCropX,
-            y: -finalCropY,
-            width: scaledWidth,
-            height: scaledHeight
-        )
-        image.draw(in: drawRect)
-        
-        // トリミングされた画像を取得
-        let croppedImage = UIGraphicsGetImageFromCurrentImageContext()
-        
+        print("✅ Image cropped successfully")
         return croppedImage
     }
 }

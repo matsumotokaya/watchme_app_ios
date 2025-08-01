@@ -186,7 +186,14 @@ class SupabaseDataManager: ObservableObject {
                     if data.subject_info == nil { print("   - Subject info: Not found") }
                 }
             } else {
-                print("⚠️ RPC returned no data.")
+                print("⚠️ RPC returned no data. Clearing all reports.")
+                await MainActor.run { [weak self] in
+                    // データが存在しないことを確定させるために、再度nilを設定する
+                    self?.dailyReport = nil
+                    self?.dailyBehaviorReport = nil
+                    self?.dailyEmotionReport = nil
+                    self?.subject = nil
+                }
             }
 
         } catch {

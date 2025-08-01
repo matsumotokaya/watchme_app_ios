@@ -412,16 +412,15 @@ struct SubjectRegistrationView: View {
                 }
                 
                 do {
-                    // ⚠️ ペンディング: アバターアップロード専用APIの実装待ち
-                    // 現在はローカルファイルシステムに保存される暫定実装
+                    // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
                         image: image,
                         type: "subjects",
                         id: subjectId
                     )
-                    print("⚠️ PENDING: Subject avatar saved locally (API not implemented): \(avatarUrl)")
+                    print("✅ Subject avatar uploaded to S3: \(avatarUrl)")
                 } catch {
-                    print("⚠️ Avatar upload failed: \(error)")
+                    print("❌ Avatar upload failed: \(error)")
                     // アバターアップロードに失敗しても、観測対象の登録は成功とする
                 }
                 
@@ -496,16 +495,15 @@ struct SubjectRegistrationView: View {
                 }
                 
                 do {
-                    // ⚠️ ペンディング: アバターアップロード専用APIの実装待ち
-                    // 現在はローカルファイルシステムに保存される暫定実装
+                    // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
                         image: image,
                         type: "subjects",
                         id: subject.subjectId
                     )
-                    print("⚠️ PENDING: Subject avatar updated locally (API not implemented): \(avatarUrl)")
+                    print("✅ Subject avatar updated on S3: \(avatarUrl)")
                 } catch {
-                    print("⚠️ Avatar upload failed: \(error)")
+                    print("❌ Avatar upload failed: \(error)")
                     // アバターアップロードに失敗しても、観測対象の更新は成功とする
                 }
                 

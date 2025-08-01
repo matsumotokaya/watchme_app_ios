@@ -14,12 +14,10 @@ class DashboardViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var selectedDate: Date = Date()
     @Published var selectedDeviceID: String? = nil
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String? = nil
     
     // MARK: - Dependencies
-    private(set) var dataManager: SupabaseDataManager
-    private(set) var deviceManager: DeviceManager
+    @Published private(set) var dataManager: SupabaseDataManager
+    @Published private(set) var deviceManager: DeviceManager
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
@@ -30,15 +28,6 @@ class DashboardViewModel: ObservableObject {
         self.dataManager = dataManager
         self.deviceManager = deviceManager
         self.selectedDate = initialDate
-    }
-    
-    // ViewのonAppearで呼ばれ、本物の依存関係を接続するメソッド
-    func connect(dataManager: SupabaseDataManager, deviceManager: DeviceManager) {
-        // すでに接続済みの場合は何もしない
-        guard self.cancellables.isEmpty else { return }
-        
-        self.dataManager = dataManager
-        self.deviceManager = deviceManager
         self.selectedDeviceID = deviceManager.selectedDeviceID
         
         setupBindings()
@@ -55,6 +44,13 @@ class DashboardViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        
+        // DeviceManagerのselectedDeviceIDの変更も監視
+        deviceManager.$selectedDeviceID
+            .sink { [weak self] newDeviceID in
+                self?.selectedDeviceID = newDeviceID
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -63,6 +59,10 @@ class DashboardViewModel: ObservableObject {
         Task {
             await fetchAllReports()
         }
+    }
+    
+    func updateSelectedDate(_ date: Date) {
+        self.selectedDate = date
     }
     
     // MARK: - Private Methods
@@ -75,9 +75,6 @@ class DashboardViewModel: ObservableObject {
             
             // デバイスIDの確認
             guard let deviceId = selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
-                await MainActor.run {
-                    self.errorMessage = "デバイスが選択されていません"
-                }
                 return
             }
             
