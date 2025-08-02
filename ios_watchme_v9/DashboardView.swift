@@ -80,10 +80,7 @@ struct DashboardView: View {
     // MARK: - Subviews
     
     private var vibeGraphCard: some View {
-        // viewModelが管理しているdataManagerを使う
-        let dataManager = viewModel.dataManager
-        
-        return VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "brain.head.profile")
                     .font(.title2)
@@ -93,7 +90,7 @@ struct DashboardView: View {
                 Spacer()
             }
             
-            if let vibeReport = dataManager.dailyReport {
+            if let vibeReport = viewModel.dataManager.dailyReport {
                 vibeReportContent(vibeReport)
             } else {
                 GraphEmptyStateView(
@@ -164,10 +161,7 @@ struct DashboardView: View {
     }
     
     private var behaviorGraphCard: some View {
-        // viewModelが管理しているdataManagerを使う
-        let dataManager = viewModel.dataManager
-        
-        return VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "figure.walk")
                     .font(.title2)
@@ -177,7 +171,7 @@ struct DashboardView: View {
                 Spacer()
             }
             
-            if let behaviorReport = dataManager.dailyBehaviorReport {
+            if let behaviorReport = viewModel.dataManager.dailyBehaviorReport {
                 behaviorReportContent(behaviorReport)
             } else {
                 GraphEmptyStateView(
@@ -239,10 +233,7 @@ struct DashboardView: View {
     }
     
     private var emotionGraphCard: some View {
-        // viewModelが管理しているdataManagerを使う
-        let dataManager = viewModel.dataManager
-        
-        return VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "heart.fill")
                     .font(.title2)
@@ -252,7 +243,7 @@ struct DashboardView: View {
                 Spacer()
             }
             
-            if let emotionReport = dataManager.dailyEmotionReport {
+            if let emotionReport = viewModel.dataManager.dailyEmotionReport {
                 emotionReportContent(emotionReport)
             } else {
                 GraphEmptyStateView(

@@ -34,7 +34,9 @@ struct ContentView: View {
     
     // DashboardViewModelを生成・管理
     @State private var dashboardViewModel: DashboardViewModel?
-    @State private var isInitialized = false
+    
+    // DatePickerの表示状態
+    @State private var showDatePicker = false
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -108,16 +110,20 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    VStack(spacing: 4) {
-                        Text(dateFormatter.string(from: selectedDate))
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                        
-                        if Calendar.current.isDateInToday(selectedDate) {
-                            Text("今日")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    Button(action: {
+                        showDatePicker = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Text(dateFormatter.string(from: selectedDate))
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            
+                            if Calendar.current.isDateInToday(selectedDate) {
+                                Text("今日")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     
@@ -249,11 +255,16 @@ struct ContentView: View {
             } message: {
                 Text("本当にログアウトしますか？")
             }
-            .sheet(isPresented: $showDeviceSelection) {
-                DeviceSelectionView(isPresented: $showDeviceSelection)
+            .sheet(isPresented: $showDeviceSelection, onDismiss: {
+                loadSubjectsForAllDevices()
+            }) {
+                DeviceSelectionView(isPresented: $showDeviceSelection, subjectsByDevice: $subjectsByDevice)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .environmentObject(authManager)
+                    .onAppear {
+                        loadSubjectsForAllDevices()
+                    }
             }
             .sheet(isPresented: $showSubjectRegistration, onDismiss: {
                 loadSubjectsForAllDevices()
@@ -300,6 +311,38 @@ struct ContentView: View {
                         }
                 }
             }
+            .sheet(isPresented: $showDatePicker) {
+                NavigationView {
+                    VStack {
+                        DatePicker(
+                            "日付を選択",
+                            selection: $selectedDate,
+                            in: ...Date(),
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(GraphicalDatePickerStyle())
+                        .padding()
+                        .environment(\.locale, Locale(identifier: "ja_JP"))
+                        
+                        Spacer()
+                    }
+                    .navigationTitle("日付を選択")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("キャンセル") {
+                                showDatePicker = false
+                            }
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("完了") {
+                                showDatePicker = false
+                            }
+                            .fontWeight(.semibold)
+                        }
+                    }
+                }
+            }
             .onChange(of: networkManager.connectionStatus) { oldValue, newValue in
                 // アップロード完了時の通知
                 if newValue == .connected && networkManager.currentUploadingFile != nil {
@@ -312,14 +355,11 @@ struct ContentView: View {
             }
             // selectedDate または selectedDeviceID が変更されたときにデータをフェッチ
             .onChange(of: selectedDate) { oldValue, newValue in
-                // DashboardViewModelに日付変更を通知（DashboardViewModelが独自にデータ取得）
+                // DashboardViewModelにも日付変更を通知
                 dashboardViewModel?.updateSelectedDate(newValue)
-                // 他のグラフビュー用にデータをフェッチ
-                fetchReports()
             }
             .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-                // 他のグラフビュー用にデータをフェッチ
-                fetchReports()
+                // ViewModelが自身のPublisherで検知するため、ここでの処理は不要
             }
             .onChange(of: selectedTab) { oldValue, newValue in
                 if newValue == 4 {
@@ -329,21 +369,17 @@ struct ContentView: View {
                 }
             }
             .onAppear {
-                // 初期化は一度だけ行う
-                if !isInitialized {
-                    isInitialized = true
-                    initializeNetworkManager()
-                    
-                    // DashboardViewModelを初期化
+                initializeNetworkManager()
+                // DashboardViewModelを初期化
+                if dashboardViewModel == nil {
                     dashboardViewModel = DashboardViewModel(
                         dataManager: dataManager,
                         deviceManager: deviceManager,
                         initialDate: selectedDate
                     )
-                    
-                    // 初回のデータフェッチ
-                    fetchReports()
                 }
+                // ViewModelのonAppearを呼び出す
+                dashboardViewModel?.onAppear()
             }
             }
         } else {
@@ -355,24 +391,6 @@ struct ContentView: View {
     }
     
     // MARK: - Private Methods
-    
-    private func fetchReports() {
-        guard authManager.isAuthenticated else {
-            dataManager.errorMessage = "ログインが必要です"
-            return
-        }
-        
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
-            dataManager.errorMessage = "デバイスが登録されていません"
-            return
-        }
-        
-        // dataManagerのisLoadingとerrorMessageはfetchAllReports内で管理される
-        
-        Task {
-            await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate)
-        }
-    }
     
     private var canGoToNextDay: Bool {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate

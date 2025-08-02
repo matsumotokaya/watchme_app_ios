@@ -12,6 +12,7 @@ struct DeviceSelectionView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var authManager: SupabaseAuthManager
     @Binding var isPresented: Bool
+    @Binding var subjectsByDevice: [String: Subject]
     @State private var showQRScanner = false
     @State private var showAddDeviceAlert = false
     @State private var addDeviceError: String?
@@ -48,7 +49,7 @@ struct DeviceSelectionView: View {
                                 DeviceRowView(
                                     device: device,
                                     isSelected: deviceManager.selectedDeviceID == device.device_id,
-                                    subject: dataManager.subject
+                                    subject: subjectsByDevice[device.device_id]
                                 ) {
                                     deviceManager.selectDevice(device.device_id)
                                     // 少し遅延を入れてからシートを閉じる（アニメーション用）
@@ -233,7 +234,7 @@ struct DeviceRowView: View {
 // プレビュー用
 struct DeviceSelectionView_Previews: PreviewProvider {
     static var previews: some View {
-        DeviceSelectionView(isPresented: .constant(true))
+        DeviceSelectionView(isPresented: .constant(true), subjectsByDevice: .constant([:]))
             .environmentObject(DeviceManager())
             .environmentObject(SupabaseDataManager())
             .environmentObject(SupabaseAuthManager(deviceManager: DeviceManager()))
