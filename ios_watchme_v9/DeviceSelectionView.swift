@@ -45,19 +45,19 @@ struct DeviceSelectionView: View {
                 } else {
                     List {
                         Section(header: Text("利用可能なデバイス")) {
-                            ForEach(deviceManager.userDevices, id: \.device_id) { device in
-                                DeviceRowView(
-                                    device: device,
-                                    isSelected: deviceManager.selectedDeviceID == device.device_id,
-                                    subject: subjectsByDevice[device.device_id]
-                                ) {
-                                    deviceManager.selectDevice(device.device_id)
+                            DeviceSectionView(
+                                devices: deviceManager.userDevices,
+                                selectedDeviceID: deviceManager.selectedDeviceID,
+                                subjectsByDevice: subjectsByDevice,
+                                showSelectionUI: true,
+                                onDeviceSelected: { deviceId in
+                                    deviceManager.selectDevice(deviceId)
                                     // 少し遅延を入れてからシートを閉じる（アニメーション用）
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                         isPresented = false
                                     }
                                 }
-                            }
+                            )
                         }
                         
                         Section {
@@ -143,90 +143,6 @@ struct DeviceSelectionView: View {
         } catch {
             addDeviceError = "デバイスの追加に失敗しました: \(error.localizedDescription)"
             showAddDeviceAlert = true
-        }
-    }
-}
-
-// デバイス行の表示用ビュー
-struct DeviceRowView: View {
-    let device: Device
-    let isSelected: Bool
-    let subject: Subject?
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            HStack {
-                // デバイスアイコン
-                Image(systemName: getDeviceIcon())
-                    .font(.system(size: 28))
-                    .foregroundColor(isSelected ? .blue : .gray)
-                    .frame(width: 40)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    // デバイスID（短縮表示）
-                    Text("デバイス: \(device.device_id.prefix(8))...")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(isSelected ? .primary : .secondary)
-                    
-                    // 測定対象
-                    if let subject = subject {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.fill")
-                                .font(.caption2)
-                            Text(subject.name ?? "名前未設定")
-                                .font(.caption)
-                        }
-                        .foregroundColor(isSelected ? .blue : .secondary)
-                    } else {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.fill.questionmark")
-                                .font(.caption2)
-                            Text("測定対象未設定")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.orange)
-                    }
-                    
-                    // ロール情報
-                    if let role = device.role {
-                        HStack(spacing: 4) {
-                            Image(systemName: role == "owner" ? "crown.fill" : "eye.fill")
-                                .font(.caption2)
-                            Text(role == "owner" ? "オーナー" : "閲覧者")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(isSelected ? .blue.opacity(0.7) : .secondary.opacity(0.7))
-                    }
-                }
-                
-                Spacer()
-                
-                // 選択中のチェックマーク
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .listRowBackground(
-            isSelected ? Color.blue.opacity(0.1) : Color.clear
-        )
-    }
-    
-    private func getDeviceIcon() -> String {
-        switch device.device_type.lowercased() {
-        case "ios":
-            return "iphone"
-        case "android":
-            return "smartphone"
-        case "web":
-            return "desktopcomputer"
-        default:
-            return "square.dashed"
         }
     }
 }

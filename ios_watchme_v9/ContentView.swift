@@ -397,89 +397,6 @@ struct ContentView: View {
         return tomorrow <= Date()
     }
     
-    // MARK: - Observation Target Methods
-    
-    @ViewBuilder
-    private func observationTargetSection(
-        for deviceId: String,
-        subjectsByDevice: [String: Subject],
-        onShowRegistration: @escaping (String) -> Void,
-        onShowEdit: @escaping (String, Subject) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "person.fill")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-                Text("観測対象")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Spacer()
-            }
-            
-            if let subject = subjectsByDevice[deviceId] {
-                // 観測対象が登録されている場合
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        InfoRowTwoLine(
-                            label: "名前",
-                            value: subject.name ?? "未設定",
-                            icon: "person.crop.circle",
-                            valueColor: .primary
-                        )
-                    }
-                    
-                    if let ageGender = subject.ageGenderDisplay {
-                        InfoRow(label: "年齢・性別", value: ageGender, icon: "info.circle")
-                    }
-                    
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            onShowEdit(deviceId, subject)
-                        }) {
-                            HStack {
-                                Image(systemName: "pencil")
-                                Text("編集")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(4)
-                        }
-                    }
-                }
-                .padding(.leading, 20)
-            } else {
-                // 観測対象が登録されていない場合
-                VStack(alignment: .leading, spacing: 6) {
-                    InfoRow(label: "状態", value: "未登録", icon: "person.crop.circle.badge.questionmark", valueColor: .secondary)
-                    
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            onShowRegistration(deviceId)
-                        }) {
-                            HStack {
-                                Image(systemName: "person.badge.plus")
-                                Text("観測対象を追加")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(4)
-                        }
-                    }
-                }
-                .padding(.leading, 20)
-            }
-        }
-    }
-    
     private func loadSubjectsForAllDevices() {
         Task {
             var newSubjects: [String: Subject] = [:]
@@ -580,31 +497,24 @@ struct UserInfoView: View {
                         if deviceManager.isLoading {
                             InfoRow(label: "状態", value: "デバイス情報を取得中...", icon: "arrow.clockwise", valueColor: .orange)
                         } else if !deviceManager.userDevices.isEmpty {
-                            ForEach(Array(deviceManager.userDevices.enumerated()), id: \.element.device_id) { index, device in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("デバイス \(index + 1)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    InfoRow(label: "デバイスID", value: device.device_id, icon: "iphone")
-                                    if device.device_id == deviceManager.selectedDeviceID {
-                                        HStack {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
-                                            Text("現在選択中")
-                                                .font(.caption)
-                                                .foregroundColor(.green)
-                                        }
-                                        .padding(.leading, 20)
-                                    }
-                                    
-                                    // 観測対象情報
-                                    observationTargetInfo(for: device.device_id)
+                            // DeviceSectionViewを使用
+                            DeviceSectionView(
+                                devices: deviceManager.userDevices,
+                                selectedDeviceID: deviceManager.selectedDeviceID,
+                                subjectsByDevice: subjectsByDevice,
+                                showSelectionUI: false,
+                                isCompact: false,
+                                onEditSubject: { deviceId, subject in
+                                    selectedDeviceForSubject = deviceId
+                                    editingSubject = subject
+                                    showSubjectEdit = true
+                                },
+                                onAddSubject: { deviceId in
+                                    selectedDeviceForSubject = deviceId
+                                    editingSubject = nil
+                                    showSubjectRegistration = true
                                 }
-                                if index < deviceManager.userDevices.count - 1 {
-                                    Divider()
-                                        .padding(.vertical, 4)
-                                }
-                            }
+                            )
                         } else {
                             VStack(spacing: 12) {
                                 InfoRow(label: "状態", value: "デバイスが連携されていません", icon: "iphone.slash", valueColor: .orange)
@@ -737,88 +647,6 @@ struct UserInfoView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-    
-    // MARK: - Observation Target Info Methods
-    
-    @ViewBuilder
-    private func observationTargetInfo(for deviceId: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "person.fill")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-                Text("観測対象")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Spacer()
-            }
-            
-            if let subject = subjectsByDevice[deviceId] {
-                // 観測対象が登録されている場合
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        InfoRowTwoLine(
-                            label: "名前",
-                            value: subject.name ?? "未設定",
-                            icon: "person.crop.circle",
-                            valueColor: .primary
-                        )
-                    }
-                    
-                    if let ageGender = subject.ageGenderDisplay {
-                        InfoRow(label: "年齢・性別", value: ageGender, icon: "info.circle")
-                    }
-                    
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            selectedDeviceForSubject = deviceId
-                            editingSubject = subject
-                            showSubjectEdit = true
-                        }) {
-                            HStack {
-                                Image(systemName: "pencil")
-                                Text("編集")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(4)
-                        }
-                    }
-                }
-                .padding(.leading, 20)
-            } else {
-                // 観測対象が登録されていない場合
-                VStack(alignment: .leading, spacing: 6) {
-                    InfoRow(label: "状態", value: "未登録", icon: "person.crop.circle.badge.questionmark", valueColor: .secondary)
-                    
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            selectedDeviceForSubject = deviceId
-                            editingSubject = nil
-                            showSubjectRegistration = true
-                        }) {
-                            HStack {
-                                Image(systemName: "person.badge.plus")
-                                Text("観測対象を追加")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(4)
-                        }
-                    }
-                }
-                .padding(.leading, 20)
             }
         }
     }
