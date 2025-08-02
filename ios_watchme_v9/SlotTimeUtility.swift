@@ -35,7 +35,7 @@ class SlotTimeUtility {
         // これにより、世界中どこでも自分の生活時間に基づいたデータ管理が可能になります
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = TimeZone.current  // デバイスのローカルタイムゾーン
+        dateFormatter.timeZone = TimeZone(abbreviation: "UTC")  // UTC基準
         return dateFormatter.string(from: date)
     }
     

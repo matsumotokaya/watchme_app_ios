@@ -39,7 +39,7 @@ class SupabaseDataManager: ObservableObject {
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone(abbreviation: "UTC")
         return formatter
     }()
     
