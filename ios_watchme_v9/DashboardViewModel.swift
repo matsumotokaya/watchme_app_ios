@@ -19,9 +19,22 @@ class DashboardViewModel: ObservableObject {
     @Published private(set) var dataManager: SupabaseDataManager
     @Published private(set) var deviceManager: DeviceManager
     
+    // MARK: - Cache
+    struct CachedData {
+        let vibeReport: DailyVibeReport?
+        let behaviorReport: BehaviorReport?
+        let emotionReport: EmotionReport?
+        let subject: Subject?
+        let fetchedAt: Date
+    }
+    
+    private var dataCache: [String: CachedData] = [:]
+    private let cacheExpirationInterval: TimeInterval = 300 // 5分間のキャッシュ
+    
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     private var fetchTask: Task<Void, Never>?
+    private var preloadTasks: [String: Task<Void, Never>] = [:]
     
     // MARK: - Initialization
     init(dataManager: SupabaseDataManager, deviceManager: DeviceManager, initialDate: Date) {
@@ -65,6 +78,56 @@ class DashboardViewModel: ObservableObject {
         self.selectedDate = date
     }
     
+    // MARK: - Cache Methods
+    func getCachedData(for date: Date) -> CachedData? {
+        guard let deviceId = selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            return nil
+        }
+        
+        let cacheKey = makeCacheKey(deviceId: deviceId, date: date)
+        
+        // キャッシュから取得
+        if let cached = dataCache[cacheKey],
+           Date().timeIntervalSince(cached.fetchedAt) < cacheExpirationInterval {
+            return cached
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Preload Methods
+    func preloadReports(for dates: [Date]) {
+        guard let deviceId = selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            return
+        }
+        
+        print("🔄 Preloading reports for \(dates.count) dates")
+        
+        for date in dates {
+            let cacheKey = makeCacheKey(deviceId: deviceId, date: date)
+            
+            // キャッシュに存在し、有効期限内の場合はスキップ
+            if let cached = dataCache[cacheKey],
+               Date().timeIntervalSince(cached.fetchedAt) < cacheExpirationInterval {
+                print("⏭️ Skipping preload for \(cacheKey) - already in cache")
+                continue
+            }
+            
+            // 既にプリロード中の場合はスキップ
+            if preloadTasks[cacheKey] != nil {
+                print("⏭️ Skipping preload for \(cacheKey) - already loading")
+                continue
+            }
+            
+            // プリロードタスクを開始
+            print("🚀 Starting preload for \(cacheKey)")
+            let task = Task {
+                await preloadReport(deviceId: deviceId, date: date, cacheKey: cacheKey)
+            }
+            preloadTasks[cacheKey] = task
+        }
+    }
+    
     // MARK: - Private Methods
     private func fetchAllReports() async {
         // 既存のタスクをキャンセル
@@ -78,8 +141,63 @@ class DashboardViewModel: ObservableObject {
                 return
             }
             
-            // データ取得を実行
+            // まずキャッシュを確認
+            if let cached = getCachedData(for: selectedDate) {
+                // キャッシュからデータを適用
+                await MainActor.run {
+                    dataManager.dailyReport = cached.vibeReport
+                    dataManager.dailyBehaviorReport = cached.behaviorReport
+                    dataManager.dailyEmotionReport = cached.emotionReport
+                    dataManager.subject = cached.subject
+                }
+                print("📱 Using cached data for \(selectedDate)")
+                return
+            }
+            
+            // キャッシュにない場合は通常通りデータ取得
             await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate)
+            
+            // 取得したデータをキャッシュに保存
+            let cacheKey = makeCacheKey(deviceId: deviceId, date: selectedDate)
+            let cachedData = CachedData(
+                vibeReport: dataManager.dailyReport,
+                behaviorReport: dataManager.dailyBehaviorReport,
+                emotionReport: dataManager.dailyEmotionReport,
+                subject: dataManager.subject,
+                fetchedAt: Date()
+            )
+            dataCache[cacheKey] = cachedData
         }
+    }
+    
+    private func makeCacheKey(deviceId: String, date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "\(deviceId)_\(formatter.string(from: date))"
+    }
+    
+    private func preloadReport(deviceId: String, date: Date, cacheKey: String) async {
+        defer {
+            preloadTasks.removeValue(forKey: cacheKey)
+        }
+        
+        // SupabaseDataManagerのフェッチメソッドを直接呼び出す
+        // 注：現在のSupabaseDataManagerは単一の日付のみサポートしているため、
+        // 一時的に新しいインスタンスを作成してデータを取得
+        let tempDataManager = SupabaseDataManager()
+        await tempDataManager.fetchAllReports(deviceId: deviceId, date: date)
+        
+        // 取得したデータをキャッシュに保存
+        let cachedData = CachedData(
+            vibeReport: tempDataManager.dailyReport,
+            behaviorReport: tempDataManager.dailyBehaviorReport,
+            emotionReport: tempDataManager.dailyEmotionReport,
+            subject: tempDataManager.subject,
+            fetchedAt: Date()
+        )
+        
+        dataCache[cacheKey] = cachedData
+        
+        print("📦 Preloaded data for \(cacheKey)")
     }
 }

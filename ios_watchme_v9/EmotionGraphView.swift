@@ -13,6 +13,9 @@ struct EmotionGraphView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     
+    // オプショナルでデータを受け取る
+    var emotionReport: EmotionReport?
+    
     @State private var selectedEmotions: Set<EmotionType> = Set(EmotionType.allCases)
     @State private var showingLegend = true
     
@@ -22,7 +25,7 @@ struct EmotionGraphView: View {
                     if dataManager.isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
-                    } else if let report = dataManager.dailyEmotionReport {
+                    } else if let report = emotionReport ?? dataManager.dailyEmotionReport {
                         // Emotion Ranking Section
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {

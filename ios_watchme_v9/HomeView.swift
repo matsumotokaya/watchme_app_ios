@@ -13,6 +13,10 @@ struct HomeView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
     
+    // オプショナルでデータを受け取る
+    var vibeReport: DailyVibeReport?
+    var subject: Subject?
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -52,8 +56,8 @@ struct HomeView: View {
                     .padding(.horizontal)
                 }
                 
-                // レポート表示
-                if let report = dataManager.dailyReport {
+                // レポート表示（引数で渡されたデータを優先）
+                if let report = vibeReport ?? dataManager.dailyReport {
                     VStack(alignment: .leading, spacing: 16) {
                         // 感情サマリーカード
                         VStack(spacing: 16) {

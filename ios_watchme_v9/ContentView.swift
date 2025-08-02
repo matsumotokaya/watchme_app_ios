@@ -55,8 +55,14 @@ struct ContentView: View {
                     .tag(0)
                     
                     // 心理グラフタブ (Vibe Graph)
-                    GraphSwipeContainerView(selectedDate: $viewState.navigation.selectedDate) { date in
-                        HomeView()
+                    GraphSwipeContainerView(
+                        selectedDate: $viewState.navigation.selectedDate,
+                        dashboardViewModel: viewState.dashboardViewModel
+                    ) { date in
+                        HomeView(
+                            vibeReport: viewState.dashboardViewModel?.getCachedData(for: date)?.vibeReport,
+                            subject: viewState.dashboardViewModel?.getCachedData(for: date)?.subject
+                        )
                     }
                     .tabItem {
                         Label("心理グラフ", systemImage: "brain")
@@ -64,8 +70,13 @@ struct ContentView: View {
                     .tag(1)
                     
                     // 行動グラフタブ (Behavior Graph)
-                    GraphSwipeContainerView(selectedDate: $viewState.navigation.selectedDate) { date in
-                        BehaviorGraphView()
+                    GraphSwipeContainerView(
+                        selectedDate: $viewState.navigation.selectedDate,
+                        dashboardViewModel: viewState.dashboardViewModel
+                    ) { date in
+                        BehaviorGraphView(
+                            behaviorReport: viewState.dashboardViewModel?.getCachedData(for: date)?.behaviorReport
+                        )
                     }
                     .tabItem {
                         Label("行動グラフ", systemImage: "figure.walk.motion")
@@ -73,8 +84,13 @@ struct ContentView: View {
                     .tag(2)
                     
                     // 感情グラフタブ (Emotion Graph)
-                    GraphSwipeContainerView(selectedDate: $viewState.navigation.selectedDate) { date in
-                        EmotionGraphView()
+                    GraphSwipeContainerView(
+                        selectedDate: $viewState.navigation.selectedDate,
+                        dashboardViewModel: viewState.dashboardViewModel
+                    ) { date in
+                        EmotionGraphView(
+                            emotionReport: viewState.dashboardViewModel?.getCachedData(for: date)?.emotionReport
+                        )
                     }
                     .tabItem {
                         Label("感情グラフ", systemImage: "heart.text.square")

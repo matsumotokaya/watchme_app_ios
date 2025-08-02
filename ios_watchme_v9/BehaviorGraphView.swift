@@ -12,6 +12,9 @@ struct BehaviorGraphView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     
+    // オプショナルでデータを受け取る
+    var behaviorReport: BehaviorReport?
+    
     @State private var expandedTimeBlocks: Set<String> = []
     
     var body: some View {
@@ -20,7 +23,7 @@ struct BehaviorGraphView: View {
                     if dataManager.isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
-                    } else if let report = dataManager.dailyBehaviorReport {
+                    } else if let report = behaviorReport ?? dataManager.dailyBehaviorReport {
                         // Summary Ranking Section
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
