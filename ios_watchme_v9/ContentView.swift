@@ -90,23 +90,6 @@ struct ContentView: View {
                         }
                 }
             }
-            .gesture(
-                DragGesture()
-                    .onEnded { value in
-                        let threshold: CGFloat = 50
-                        if value.translation.width > threshold {
-                            // 右スワイプ = 前日
-                            withAnimation {
-                                viewState.navigation.selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: viewState.navigation.selectedDate) ?? viewState.navigation.selectedDate
-                            }
-                        } else if value.translation.width < -threshold && canGoToNextDay {
-                            // 左スワイプ = 翌日
-                            withAnimation {
-                                viewState.navigation.selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: viewState.navigation.selectedDate) ?? viewState.navigation.selectedDate
-                            }
-                        }
-                    }
-            )
             .modifier(AlertModifier(
                 showAlert: $viewState.alerts.showAlert,
                 alertMessage: $viewState.alerts.alertMessage,
@@ -169,11 +152,6 @@ struct ContentView: View {
     }
     
     // MARK: - Private Methods
-    
-    private var canGoToNextDay: Bool {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: viewState.navigation.selectedDate) ?? viewState.navigation.selectedDate
-        return tomorrow <= Date()
-    }
     
     private func loadSubjectsForAllDevices() {
         Task {
