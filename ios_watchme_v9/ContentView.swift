@@ -469,23 +469,26 @@ struct UserInfoView: View {
                     // ユーザーアカウント情報
                     InfoSection(title: "ユーザーアカウント情報") {
                         if let user = authManager.currentUser {
-                            InfoRowTwoLine(label: "メールアドレス", value: user.email, icon: "envelope.fill")
-                            InfoRowTwoLine(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
+                            // 名前（profile.nameから取得）
+                            if let profile = user.profile, let name = profile.name {
+                                InfoRowTwoLine(label: "名前", value: name, icon: "person.fill")
+                            }
                             
-                            // プロファイル情報がある場合の追加項目
+                            InfoRowTwoLine(label: "メールアドレス", value: user.email, icon: "envelope.fill")
+                            
+                            // ニュースレター配信設定（会員登録日より上に配置）
                             if let profile = user.profile {
+                                let newsletterStatus = profile.newsletter == true ? "ON" : "OFF"
+                                InfoRow(label: "ニュースレター配信", value: newsletterStatus, icon: "envelope.badge", valueColor: profile.newsletter == true ? .green : .secondary)
+                                
                                 // 会員登録日
                                 if let createdAt = profile.createdAt {
                                     let formattedDate = formatDate(createdAt)
                                     InfoRow(label: "会員登録日", value: formattedDate, icon: "calendar.badge.plus")
                                 }
-                                
-                                // ニュースレター配信設定
-                                if let newsletter = profile.newsletter {
-                                    let newsletterStatus = newsletter ? "受信希望" : "不要"
-                                    InfoRow(label: "ニュースレター配信", value: newsletterStatus, icon: "envelope.badge", valueColor: newsletter ? .green : .secondary)
-                                }
                             }
+                            
+                            InfoRowTwoLine(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
                         } else {
                             InfoRow(label: "状態", value: "ログインしていません", icon: "exclamationmark.triangle.fill", valueColor: .red)
                         }
@@ -543,13 +546,6 @@ struct UserInfoView: View {
                         if let error = deviceManager.registrationError {
                             InfoRow(label: "エラー", value: error, icon: "exclamationmark.triangle.fill", valueColor: .red)
                         }
-                    }
-                    
-                    // 認証状態
-                    InfoSection(title: "認証状態") {
-                        InfoRow(label: "認証状態", value: authManager.isAuthenticated ? "認証済み" : "未認証", 
-                               icon: authManager.isAuthenticated ? "checkmark.shield.fill" : "xmark.shield.fill",
-                               valueColor: authManager.isAuthenticated ? .green : .red)
                     }
                 }
                 
