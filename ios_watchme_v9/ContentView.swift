@@ -55,21 +55,27 @@ struct ContentView: View {
                     .tag(0)
                     
                     // 心理グラフタブ (Vibe Graph)
-                    HomeView() // 引数を削除
+                    GraphSwipeContainerView(selectedDate: $viewState.navigation.selectedDate) { date in
+                        HomeView()
+                    }
                     .tabItem {
                         Label("心理グラフ", systemImage: "brain")
                     }
                     .tag(1)
                     
                     // 行動グラフタブ (Behavior Graph)
-                    BehaviorGraphView()
+                    GraphSwipeContainerView(selectedDate: $viewState.navigation.selectedDate) { date in
+                        BehaviorGraphView()
+                    }
                     .tabItem {
                         Label("行動グラフ", systemImage: "figure.walk.motion")
                     }
                     .tag(2)
                     
                     // 感情グラフタブ (Emotion Graph)
-                    EmotionGraphView()
+                    GraphSwipeContainerView(selectedDate: $viewState.navigation.selectedDate) { date in
+                        EmotionGraphView()
+                    }
                     .tabItem {
                         Label("感情グラフ", systemImage: "heart.text.square")
                     }
