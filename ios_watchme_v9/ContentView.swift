@@ -54,14 +54,13 @@ struct ContentView: View {
                     }
                     .tag(0)
                     
-                    // 心理グラフタブ (Vibe Graph)
-                    GraphSwipeContainerView(
-                        selectedDate: $viewState.navigation.selectedDate,
-                        dashboardViewModel: viewState.dashboardViewModel
-                    ) { date in
+                    // 心理グラフタブ (Vibe Graph) - プロトタイプ版
+                    DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
                         HomeView(
-                            vibeReport: viewState.dashboardViewModel?.getCachedData(for: date)?.vibeReport,
-                            subject: viewState.dashboardViewModel?.getCachedData(for: date)?.subject
+                            vibeReport: viewState.dashboardViewModel?.getCachedData(for: date)?.vibeReport 
+                                      ?? (date == viewState.navigation.selectedDate ? dataManager.dailyReport : nil),
+                            subject: viewState.dashboardViewModel?.getCachedData(for: date)?.subject 
+                                   ?? (date == viewState.navigation.selectedDate ? dataManager.subject : nil)
                         )
                     }
                     .tabItem {
@@ -70,12 +69,10 @@ struct ContentView: View {
                     .tag(1)
                     
                     // 行動グラフタブ (Behavior Graph)
-                    GraphSwipeContainerView(
-                        selectedDate: $viewState.navigation.selectedDate,
-                        dashboardViewModel: viewState.dashboardViewModel
-                    ) { date in
+                    DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
                         BehaviorGraphView(
                             behaviorReport: viewState.dashboardViewModel?.getCachedData(for: date)?.behaviorReport
+                                          ?? (date == viewState.navigation.selectedDate ? dataManager.dailyBehaviorReport : nil)
                         )
                     }
                     .tabItem {
@@ -84,12 +81,10 @@ struct ContentView: View {
                     .tag(2)
                     
                     // 感情グラフタブ (Emotion Graph)
-                    GraphSwipeContainerView(
-                        selectedDate: $viewState.navigation.selectedDate,
-                        dashboardViewModel: viewState.dashboardViewModel
-                    ) { date in
+                    DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
                         EmotionGraphView(
                             emotionReport: viewState.dashboardViewModel?.getCachedData(for: date)?.emotionReport
+                                         ?? (date == viewState.navigation.selectedDate ? dataManager.dailyEmotionReport : nil)
                         )
                     }
                     .tabItem {

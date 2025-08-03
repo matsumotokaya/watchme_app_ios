@@ -64,7 +64,7 @@ struct SheetState {
 
 // MARK: - Navigation State
 struct NavigationState {
-    var selectedDate = Date()
+    var selectedDate = Calendar.current.startOfDay(for: Date())
     var selectedTab = 0
 }
 
