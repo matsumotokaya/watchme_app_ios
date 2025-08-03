@@ -26,11 +26,18 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 - **明示的なデバイス連携**: ユーザーが手動でデバイスを連携（v9.13.0〜）
 - **QRコードによるデバイス追加**: QRコードスキャンで簡単にデバイスを追加（v9.15.0〜）
   - デバイス選択画面からカメラでQRコードをスキャン
-  - QRコード内容はシンプルにdevice_idのみ（UUID形式）
+  - **現在**: QRコード内容はdevice_idのみ（UUID形式）
+  - **今後の予定**: QRコードにデバイスIDとタイムゾーン情報の両方を含める
+    - デバイス追加時にタイムゾーン情報も正確に同期
+    - QRコード生成側での対応も必要
   - デバイスIDの妥当性検証とデータベース存在確認
   - 成功・失敗時のポップアップフィードバック
   - デフォルト権限は「owner」で追加
 - **タイムゾーン対応**: ユーザーのローカルタイムゾーンでの記録管理
+- **ユーザープロフィール管理**: 
+  - ニュースレター配信設定（ON/OFF）の管理
+  - アバター画像のアップロード（AWS S3経由）
+  - ユーザー情報（マイページ）からプロフィール設定を変更可能
 
 ## 重要：ユーザーIDとデバイスIDの関係
 
@@ -788,6 +795,67 @@ VIBEデータが見つからない場合の確認手順：
 3. **日付フォーマットの確認**
    - 日付は`YYYY-MM-DD`形式で保存される
    - タイムゾーンは考慮されない（日付のみ）
+
+## UI/UX設計ガイドライン
+
+### NavigationViewの適切な使用方法
+
+本アプリケーションでは、iOS標準のUIを維持しつつ、適切なナビゲーション構造を実現するため、以下のルールを遵守します：
+
+#### ✅ 推奨される実装パターン
+
+1. **モーダル（.sheet）内でのNavigationView使用**
+   ```swift
+   .sheet(isPresented: $showSheet) {
+       NavigationView {  // モーダル内で独立したNavigationViewを使用
+           ContentView()
+               .navigationTitle("タイトル")
+               .toolbar {
+                   ToolbarItem(placement: .cancellationAction) {
+                       Button("キャンセル") { dismiss() }
+                   }
+               }
+       }
+   }
+   ```
+   - モーダルは独立したプレゼンテーションなので、その中でNavigationViewを使用してもネストになりません
+   - iOS標準の美しいツールバーとナビゲーションバーが利用できます
+
+2. **NavigationLinkによる画面遷移**
+   ```swift
+   NavigationLink(destination: DetailView()) {
+       Text("詳細画面へ")
+   }
+   ```
+   - 階層的なナビゲーションにはNavigationLinkを使用
+   - モーダルではなく、プッシュ遷移が適切な場合に使用
+
+#### ❌ 避けるべき実装パターン
+
+1. **NavigationViewの入れ子（ネスト）**
+   ```swift
+   // NG: NavigationView内でさらにNavigationViewを含むビューを表示
+   NavigationView {
+       NavigationLink(destination: NavigationView { ... })
+   }
+   ```
+
+2. **モーダル呼び出し時のNavigationViewラップ**
+   ```swift
+   // NG: sheet呼び出し側でNavigationViewでラップ
+   .sheet(isPresented: $show) {
+       NavigationView {  // 呼び出し側でラップしない
+           SomeView()
+       }
+   }
+   ```
+
+#### 実装例：UserInfoViewのアバター選択
+
+正しい実装により、iOS標準の美しいUIを実現：
+- アバター選択画面はモーダル（sheet）で表示
+- モーダル内で独立したNavigationViewを使用
+- 標準的なツールバーでキャンセルボタンを配置
 
 ## Git 運用ルール（ブランチベース開発フロー）
 

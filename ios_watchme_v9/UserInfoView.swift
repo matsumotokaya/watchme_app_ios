@@ -24,7 +24,7 @@ struct UserInfoView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 24) {
                 // ユーザーアバター編集可能なセクション
                 VStack(spacing: 12) {
@@ -69,8 +69,38 @@ struct UserInfoView: View {
                             
                             // ニュースレター配信設定（会員登録日より上に配置）
                             if let profile = user.profile {
-                                let newsletterStatus = profile.newsletter == true ? "ON" : "OFF"
-                                InfoRow(label: "ニュースレター配信", value: newsletterStatus, icon: "envelope.badge", valueColor: profile.newsletter == true ? .green : .secondary)
+                                
+                                // ニュースレター設定切り替え
+                                HStack {
+                                    Image(systemName: "envelope.badge")
+                                        .foregroundColor(.blue)
+                                        .frame(width: 20)
+                                    
+                                    Text("ニュースレター配信")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                    
+                                    if let newsletter = profile.newsletter {
+                                        Toggle("", isOn: Binding(
+                                            get: { newsletter },
+                                            set: { newValue in
+                                                authManager.updateUserProfile(newsletterSubscription: newValue)
+                                            }
+                                        ))
+                                        .labelsHidden()
+                                    } else {
+                                        // 未設定の場合はデフォルトでfalse
+                                        Toggle("", isOn: Binding(
+                                            get: { false },
+                                            set: { newValue in
+                                                authManager.updateUserProfile(newsletterSubscription: newValue)
+                                            }
+                                        ))
+                                        .labelsHidden()
+                                    }
+                                }
                                 
                                 // 会員登録日
                                 if let createdAt = profile.createdAt {
@@ -213,18 +243,13 @@ struct UserInfoView: View {
         }
         .sheet(isPresented: $showAvatarPicker) {
             NavigationView {
-                VStack {
-                    AvatarPickerView(
-                        currentAvatarURL: getAvatarURL(),
-                        onImageSelected: { image in
-                            uploadAvatar(image: image)
-                        },
-                        onDelete: nil // ユーザーアバターの削除は現時点では実装しない
-                    )
-                    .padding()
-                    
-                    Spacer()
-                }
+                AvatarPickerView(
+                    currentAvatarURL: getAvatarURL(),
+                    onImageSelected: { image in
+                        uploadAvatar(image: image)
+                    },
+                    onDelete: nil // ユーザーアバターの削除は現時点では実装しない
+                )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -306,210 +331,26 @@ struct UserInfoView: View {
     }
 }
 
-// MARK: - 情報セクション
-struct InfoSection<Content: View>: View {
-    let title: String
-    let content: Content
-    
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.primary)
-            
-            VStack(spacing: 8) {
-                content
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-        }
-        .padding(.horizontal)
-    }
-}
-
-// MARK: - 情報行
-struct InfoRow: View {
-    let label: String
-    let value: String
-    let icon: String
-    let valueColor: Color
-    
-    init(label: String, value: String, icon: String, valueColor: Color = .primary) {
-        self.label = label
-        self.value = value
-        self.icon = icon
-        self.valueColor = valueColor
-    }
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-                .frame(width: 20)
-            
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Spacer()
-            
-            Text(value)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(valueColor)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-    }
-}
-
-// MARK: - 2行表示情報行
-struct InfoRowTwoLine: View {
-    let label: String
-    let value: String
-    let icon: String
-    let valueColor: Color
-    
-    init(label: String, value: String, icon: String, valueColor: Color = .primary) {
-        self.label = label
-        self.value = value
-        self.icon = icon
-        self.valueColor = valueColor
-    }
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-                .frame(width: 20)
-                .padding(.top, 2)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                Text(value)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(valueColor)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            
-            Spacer()
-        }
-    }
-}
 
 // MARK: - アバタービュー
-struct AvatarView: View {
-    let userId: String?
-    let size: CGFloat = 80
-    let useS3: Bool = true // ✅ Avatar Uploader APIを使用してS3に保存
-    @EnvironmentObject var dataManager: SupabaseDataManager
-    @State private var avatarUrl: URL?
-    @State private var isLoadingAvatar = true
-    @State private var lastUpdateTime = Date()
-    
-    var body: some View {
-        Group {
-            if isLoadingAvatar {
-                // 読み込み中
-                ZStack {
-                    Circle()
-                        .fill(Color.gray.opacity(0.1))
-                        .frame(width: size, height: size)
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
-            } else if let url = avatarUrl {
-                // アバター画像を表示
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: size, height: size)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                            )
-                    case .failure(_):
-                        // エラー時のデフォルトアイコン
-                        defaultAvatarView
-                    case .empty:
-                        // 読み込み中
-                        ZStack {
-                            Circle()
-                                .fill(Color.gray.opacity(0.1))
-                                .frame(width: size, height: size)
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                        }
-                    @unknown default:
-                        defaultAvatarView
-                    }
-                }
-            } else {
-                // アバター未設定時のデフォルトアイコン
-                defaultAvatarView
-            }
-        }
-        .onAppear {
-            loadAvatar()
-        }
-        .onChange(of: userId) { oldValue, newValue in
-            loadAvatar()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AvatarUpdated"))) { _ in
-            // アバターが更新されたら再読み込み
-            lastUpdateTime = Date()
-            loadAvatar()
-        }
-    }
-    
-    private func loadAvatar() {
-        Task {
-            guard let userId = userId else {
-                print("⚠️ ユーザーIDが指定されていません")
-                isLoadingAvatar = false
-                return
-            }
-            
-            isLoadingAvatar = true
-            
-            if useS3 {
-                // S3のURLを設定（Avatar Uploader API経由でアップロード済み）
-                let baseURL = AWSManager.shared.getAvatarURL(type: "users", id: userId)
-                let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
-                self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
-                print("🌐 Loading avatar from S3: \(self.avatarUrl?.absoluteString ?? "nil")")
-            } else {
-                // Supabaseから取得（既存の実装）
-                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
-            }
-            
-            self.isLoadingAvatar = false
-        }
-    }
-    
-    private var defaultAvatarView: some View {
-        Image(systemName: "person.crop.circle.fill")
-            .font(.system(size: size))
-            .foregroundColor(.blue)
+
+// MARK: - ヘルパー関数
+private func getNewsletterStatus(_ newsletter: Bool?) -> String {
+    if let newsletter = newsletter {
+        return newsletter ? "ON" : "OFF"
+    } else {
+        return "未設定"
     }
 }
 
-// MARK: - ヘルパー関数
+private func getNewsletterStatusColor(_ newsletter: Bool?) -> Color {
+    if let newsletter = newsletter {
+        return newsletter ? .green : .secondary
+    } else {
+        return .orange
+    }
+}
+
 private func formatDate(_ dateString: String) -> String {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

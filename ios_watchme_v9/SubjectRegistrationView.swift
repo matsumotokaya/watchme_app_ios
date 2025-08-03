@@ -42,7 +42,7 @@ struct SubjectRegistrationView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // ヘッダー
@@ -227,7 +227,7 @@ struct SubjectRegistrationView: View {
             }
         }
         .sheet(isPresented: $showingAvatarPicker) {
-            NavigationView {
+            NavigationStack {
                 VStack {
                     AvatarPickerView(
                         currentAvatarURL: editingSubject != nil ? AWSManager.shared.getAvatarURL(type: "subjects", id: editingSubject!.subjectId) : nil,

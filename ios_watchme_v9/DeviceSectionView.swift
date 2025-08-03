@@ -101,6 +101,15 @@ struct DeviceSectionView: View {
                     .font(.system(.body, design: .monospaced))
                     .foregroundColor(device.device_id == selectedDeviceID ? .primary : .secondary)
                 
+                // タイムゾーン表示
+                HStack(spacing: 4) {
+                    Image(systemName: "globe")
+                        .font(.caption2)
+                    Text("タイムゾーン: \(device.timezone ?? "未設定")")
+                        .font(.caption)
+                }
+                .foregroundColor(device.device_id == selectedDeviceID ? .blue.opacity(0.8) : .secondary)
+                
                 // 測定対象（簡易表示）
                 if let subject = subjectsByDevice[device.device_id] {
                     HStack(spacing: 4) {
@@ -258,6 +267,7 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 platform_identifier: "sample1",
                 device_type: "ios",
                 platform_type: "iOS",
+                timezone: "Asia/Tokyo",
                 owner_user_id: "user1",
                 subject_id: nil,
                 role: "owner"
@@ -267,6 +277,7 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 platform_identifier: "sample2",
                 device_type: "android",
                 platform_type: "Android",
+                timezone: "America/New_York",
                 owner_user_id: "user1",
                 subject_id: nil,
                 role: "viewer"

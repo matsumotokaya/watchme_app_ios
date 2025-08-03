@@ -87,10 +87,15 @@ class DeviceManager: ObservableObject {
         Task { @MainActor in
             do {
                 // --- ステップ1: devicesテーブルにデバイスを登録 ---
+                // iOSのIANAタイムゾーン識別子を取得
+                let timezone = TimeZone.current.identifier // 例: "Asia/Tokyo"
+                print("🌍 デバイスタイムゾーン: \(timezone)")
+                
                 let deviceData = DeviceInsert(
                     platform_identifier: platformIdentifier,
                     device_type: "ios",
-                    platform_type: "iOS"
+                    platform_type: "iOS",
+                    timezone: timezone
                 )
                 
                 // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
@@ -172,10 +177,15 @@ class DeviceManager: ObservableObject {
         
         do {
             // --- ステップ1: devicesテーブルにデバイスを登録 ---
+            // iOSのIANAタイムゾーン識別子を取得
+            let timezone = TimeZone.current.identifier // 例: "Asia/Tokyo"
+            print("🌍 デバイスタイムゾーン: \(timezone)")
+            
             let deviceData = DeviceInsert(
                 platform_identifier: platformIdentifier,
                 device_type: "ios",
-                platform_type: "iOS"
+                platform_type: "iOS",
+                timezone: timezone
             )
             
             // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
@@ -418,6 +428,11 @@ class DeviceManager: ObservableObject {
     }
     
     // MARK: - QRコードによるデバイス追加
+    // TODO: 将来的にQRコードにはデバイスIDとタイムゾーンの両方を含める必要があります
+    // 現在はデバイスIDのみですが、後日以下の対応が必要です：
+    // 1. QRコード生成時にタイムゾーン情報も含める
+    // 2. スキャン時にデバイスIDとタイムゾーンの両方を取得
+    // 3. デバイス追加時にタイムゾーンもDBに保存
     func addDeviceByQRCode(_ deviceId: String, for userId: String) async throws {
         // UUIDの妥当性チェック
         guard UUID(uuidString: deviceId) != nil else {
@@ -482,6 +497,7 @@ struct DeviceInsert: Codable {
     let platform_identifier: String
     let device_type: String
     let platform_type: String
+    let timezone: String // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
 }
 
 // Supabase Response用データモデル
@@ -490,6 +506,7 @@ struct Device: Codable {
     let platform_identifier: String
     let device_type: String
     let platform_type: String
+    let timezone: String? // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
     let owner_user_id: String?
     let subject_id: String?
     // user_devicesテーブルから取得した場合のrole情報を保持

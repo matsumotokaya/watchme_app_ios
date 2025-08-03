@@ -266,6 +266,7 @@ class SupabaseAuthManager: ObservableObject {
                     print("✅ プロファイル取得成功")
                     print("   - 名前: \(profile.name ?? "未設定")")
                     print("   - ステータス: \(profile.status ?? "未設定")")
+                    print("   - ニュースレター: \(String(describing: profile.newsletter))")
                 } else {
                     print("⚠️ プロファイルが見つかりません")
                 }
@@ -333,6 +334,53 @@ class SupabaseAuthManager: ObservableObject {
             return nil
         }
     }
+    
+    // MARK: - ユーザープロファイル更新
+    func updateUserProfile(newsletterSubscription: Bool? = nil) {
+        guard let currentUser = currentUser else {
+            print("❌ ログインしていません")
+            return
+        }
+        
+        print("📝 ユーザープロファイル更新開始: \(currentUser.id)")
+        
+        Task { @MainActor in
+            do {
+                struct ProfileUpdate: Codable {
+                    let newsletter_subscription: Bool?
+                    let updated_at: String
+                }
+                
+                let now = ISO8601DateFormatter().string(from: Date())
+                let profileUpdate = ProfileUpdate(
+                    newsletter_subscription: newsletterSubscription,
+                    updated_at: now
+                )
+                
+                // Supabase SDKの標準メソッドを使用
+                try await supabase
+                    .from("users")
+                    .update(profileUpdate)
+                    .eq("user_id", value: currentUser.id)
+                    .execute()
+                
+                print("✅ プロファイル更新成功")
+                
+                // 更新後のプロファイルを再取得
+                self.fetchUserProfile(userId: currentUser.id)
+                
+            } catch {
+                print("❌ プロファイル更新エラー: \(error)")
+                self.authError = "プロファイルの更新に失敗しました: \(error.localizedDescription)"
+                
+                // PostgrestErrorの詳細を表示
+                if let dbError = error as? PostgrestError {
+                    print("   - コード: \(dbError.code ?? "不明")")
+                    print("   - メッセージ: \(dbError.message)")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - データモデル
@@ -365,7 +413,7 @@ struct UserProfile: Codable {
         case subscriptionPlan = "subscription_plan"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
-        case newsletter
+        case newsletter = "newsletter_subscription"  // DBカラム名に合わせて修正
     }
 }
 
