@@ -465,6 +465,7 @@ struct RecordingRowView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onDelete: (RecordingModel) -> Void
+    @EnvironmentObject var deviceManager: DeviceManager
     
     var body: some View {
         HStack {
@@ -481,7 +482,7 @@ struct RecordingRowView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                Text(DateFormatter.display.string(from: recording.date))
+                Text(DateFormatter.display(for: deviceManager).string(from: recording.date))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -554,14 +555,15 @@ struct RecordingRowView: View {
 
 // 日付フォーマッター
 extension DateFormatter {
-    static let display: DateFormatter = {
+    static func display(for deviceManager: DeviceManager) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
         formatter.locale = Locale.current
-        formatter.timeZone = TimeZone.current
+        // デバイスのタイムゾーンを使用
+        formatter.timeZone = deviceManager.selectedDeviceTimezone
         return formatter
-    }()
+    }
 }
 
 #Preview {

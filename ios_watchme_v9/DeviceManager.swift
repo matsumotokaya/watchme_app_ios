@@ -427,6 +427,38 @@ class DeviceManager: ObservableObject {
         )
     }
     
+    // MARK: - タイムゾーン関連
+    /// 選択中のデバイスのタイムゾーンを取得
+    var selectedDeviceTimezone: TimeZone {
+        // 選択されたデバイスIDがあればそのタイムゾーンを返す
+        if let deviceId = selectedDeviceID,
+           let device = userDevices.first(where: { $0.device_id == deviceId }),
+           let timezoneString = device.timezone,
+           let timezone = TimeZone(identifier: timezoneString) {
+            return timezone
+        }
+        
+        // フォールバック：現在のデバイスのタイムゾーン
+        return TimeZone.current
+    }
+    
+    /// デバイスのタイムゾーンを考慮したCalendarを取得
+    var deviceCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.timeZone = selectedDeviceTimezone
+        return calendar
+    }
+    
+    /// 指定したデバイスIDのタイムゾーンを取得
+    func getTimezone(for deviceId: String) -> TimeZone {
+        if let device = userDevices.first(where: { $0.device_id == deviceId }),
+           let timezoneString = device.timezone,
+           let timezone = TimeZone(identifier: timezoneString) {
+            return timezone
+        }
+        return TimeZone.current
+    }
+    
     // MARK: - QRコードによるデバイス追加
     // TODO: 将来的にQRコードにはデバイスIDとタイムゾーンの両方を含める必要があります
     // 現在はデバイスIDのみですが、後日以下の対応が必要です：

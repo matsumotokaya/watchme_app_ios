@@ -30,18 +30,19 @@ class SlotTimeUtility {
     }
     
     // MARK: - 日付文字列を取得（YYYY-MM-DD形式）
-    static func getDateString(from date: Date) -> String {
-        // ユーザー体験のため、デバイスのローカルタイムゾーンを使用します
-        // これにより、世界中どこでも自分の生活時間に基づいたデータ管理が可能になります
+    static func getDateString(from date: Date, timezone: TimeZone? = nil) -> String {
+        // デバイスのローカルタイムゾーンを使用します
+        // これにより、観測対象の生活時間に基づいたデータ管理が可能になります
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = TimeZone(abbreviation: "UTC")  // UTC基準
+        // タイムゾーンが指定されていればそれを使用、なければ現在のタイムゾーン
+        dateFormatter.timeZone = timezone ?? TimeZone.current
         return dateFormatter.string(from: date)
     }
     
     // MARK: - 完全なファイルパスを生成（device_id/YYYY-MM-DD/raw/HH-MM.wav）
-    static func generateFilePath(deviceID: String, date: Date) -> String {
-        let dateString = getDateString(from: date)
+    static func generateFilePath(deviceID: String, date: Date, timezone: TimeZone? = nil) -> String {
+        let dateString = getDateString(from: date, timezone: timezone)
         let slotName = getSlotName(from: date)
         return "\(deviceID)/\(dateString)/raw/\(slotName).wav"
     }

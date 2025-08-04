@@ -155,7 +155,9 @@ class DashboardViewModel: ObservableObject {
             }
             
             // キャッシュにない場合は通常通りデータ取得
-            await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate)
+            // デバイスのタイムゾーンを渡す
+            let timezone = deviceManager.getTimezone(for: deviceId)
+            await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate, timezone: timezone)
             
             // 取得したデータをキャッシュに保存
             let cacheKey = makeCacheKey(deviceId: deviceId, date: selectedDate)
@@ -173,6 +175,8 @@ class DashboardViewModel: ObservableObject {
     private func makeCacheKey(deviceId: String, date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
+        // デバイスのタイムゾーンを使用して日付文字列を生成
+        formatter.timeZone = deviceManager.getTimezone(for: deviceId)
         return "\(deviceId)_\(formatter.string(from: date))"
     }
     
@@ -185,7 +189,9 @@ class DashboardViewModel: ObservableObject {
         // 注：現在のSupabaseDataManagerは単一の日付のみサポートしているため、
         // 一時的に新しいインスタンスを作成してデータを取得
         let tempDataManager = SupabaseDataManager()
-        await tempDataManager.fetchAllReports(deviceId: deviceId, date: date)
+        // デバイスのタイムゾーンを渡す
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        await tempDataManager.fetchAllReports(deviceId: deviceId, date: date, timezone: timezone)
         
         // 取得したデータをキャッシュに保存
         let cachedData = CachedData(

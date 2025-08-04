@@ -6,8 +6,12 @@ struct DatePagingView<Content: View>: View {
     @Binding var selectedDate: Date
     let dashboardViewModel: DashboardViewModel?
     let content: (Date) -> Content
+    @EnvironmentObject var deviceManager: DeviceManager
     
-    private let calendar = Calendar.current
+    /// デバイスのタイムゾーンを考慮したCalendar
+    private var calendar: Calendar {
+        deviceManager.deviceCalendar
+    }
     
     /// 選択された日付（日付部分のみ）
     private var normalizedSelectedDate: Date {

@@ -1,5 +1,52 @@
 # 更新履歴
 
+### 2025年8月4日
+- **v9.17.0 - デバイスタイムゾーン中心の設計を全面実装**
+  - **ライフログツールとしての設計思想を明確化**
+    - 観測対象（デバイスを装着している人）の生活リズムを正確に記録
+    - デバイスのタイムゾーン = 観測対象が生活している場所のタイムゾーン
+    - アカウント所有者の位置は無関係（観測データを閲覧するだけ）
+    - 旅行などの一時的な移動ではタイムゾーンを変更しない（一貫性のため）
+    
+  - **file_pathの重要性と構造化計画**
+    - file_pathが信頼できる唯一の時間情報源であることを文書化
+    - Whisper API、ChatGPT処理でfile_pathから日付・時間を抽出
+    - recorded_atカラムの廃止計画を策定（グラフ生成で未使用のため）
+    - 将来的なaudio_filesテーブル構造化（local_date、time_slot）を計画
+    
+  - **UTC変換の完全廃止**
+    - SlotTimeUtilityからUTC変換を削除
+    - SupabaseDataManagerからUTC変換を削除
+    - データはデバイスのローカル時間で保存・処理・表示
+    
+  - **Calendar.currentの使用廃止**
+    - DatePagingView、DateNavigationViewをデバイスCalendar使用に変更
+    - 「今日」の判定もデバイスのタイムゾーンで実行
+    - すべての日付計算をdeviceManager.deviceCalendarで統一
+    
+  - **DeviceManagerの拡張**
+    - `selectedDeviceTimezone`プロパティ追加（選択デバイスのタイムゾーン取得）
+    - `deviceCalendar`プロパティ追加（デバイスタイムゾーンのCalendar）
+    - `getTimezone(for:)`メソッド追加（特定デバイスのタイムゾーン取得）
+    
+  - **データ取得時のタイムゾーン対応**
+    - DashboardViewModelのキャッシュキー生成でデバイスタイムゾーン使用
+    - SupabaseDataManagerの`fetchAllReports`にタイムゾーンパラメータ追加
+    - デバイス切り替え時に自動的にタイムゾーンが適用される
+    
+  - **録音機能のタイムゾーン対応**
+    - AudioRecorderがデバイスのタイムゾーンでファイルパス生成
+    - RecordingViewの日時表示もデバイスタイムゾーンに対応
+    
+  - **データベース構造の更新**
+    - devicesテーブルにtimezoneカラムを追加（IANAタイムゾーン識別子）
+    - デバイス登録時にTimeZone.current.identifierを保存
+    
+  - **実装の技術的詳細**
+    - タイムゾーンの明示的な管理（暗黙的な使用を避ける）
+    - デバイス切り替え時のタイムゾーン伝搬を確実に実施
+    - 将来の複数デバイス統合表示への対応基盤を整備
+
 ### 2025年8月1日
 - **v9.16.1 - Avatar Uploader API連携実装（未解決の問題あり）**
   - **実装内容**

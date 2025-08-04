@@ -10,24 +10,36 @@ import SwiftUI
 struct DateNavigationView: View {
     @Binding var selectedDate: Date
     @Binding var showDatePicker: Bool
+    @EnvironmentObject var deviceManager: DeviceManager
     
-    private let dateFormatter: DateFormatter = {
+    /// デバイスのタイムゾーンを考慮したCalendar
+    private var calendar: Calendar {
+        deviceManager.deviceCalendar
+    }
+    
+    /// デバイスのタイムゾーンを考慮したDateFormatter
+    private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月dd日"
         formatter.locale = Locale(identifier: "ja_JP")
+        formatter.timeZone = deviceManager.selectedDeviceTimezone
         return formatter
-    }()
+    }
     
     private var canGoToNextDay: Bool {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-        return tomorrow <= Date()
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+        // デバイスのタイムゾーンでの「今日」を基準に判定
+        let deviceNow = Date()
+        let deviceToday = calendar.startOfDay(for: deviceNow)
+        let deviceTomorrow = calendar.date(byAdding: .day, value: 1, to: deviceToday) ?? deviceToday
+        return tomorrow <= deviceTomorrow
     }
     
     var body: some View {
         HStack {
             Button(action: {
                 withAnimation {
-                    selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                    selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
                 }
             }) {
                 Image(systemName: "chevron.left")
@@ -47,7 +59,7 @@ struct DateNavigationView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                     
-                    if Calendar.current.isDateInToday(selectedDate) {
+                    if calendar.isDateInToday(selectedDate) {
                         Text("今日")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -59,8 +71,11 @@ struct DateNavigationView: View {
             
             Button(action: {
                 withAnimation {
-                    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                    if tomorrow <= Date() {
+                    let tomorrow = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+                    // デバイスのタイムゾーンでの判定
+                    let deviceToday = calendar.startOfDay(for: Date())
+                    let deviceTomorrow = calendar.date(byAdding: .day, value: 1, to: deviceToday) ?? deviceToday
+                    if tomorrow <= deviceTomorrow {
                         selectedDate = tomorrow
                     }
                 }

@@ -22,6 +22,9 @@ class AudioRecorder: NSObject, ObservableObject {
     private var recordingStartTime: Date?
     private var currentSlotStartTime: Date?
     
+    // DeviceManagerの参照（タイムゾーン取得用）
+    var deviceManager: DeviceManager?
+    
     // スロット切り替え状態管理
     private var pendingSlotSwitch: SlotSwitchInfo?
     
@@ -120,6 +123,7 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     // 現在の30分スロット時刻を取得（HH-mm形式）
+    // デバイスのタイムゾーンを考慮
     private func getCurrentSlot() -> String {
         return SlotTimeUtility.getCurrentSlot()
     }
@@ -127,6 +131,12 @@ class AudioRecorder: NSObject, ObservableObject {
     // 特定の時刻のスロットを取得
     private func getSlotForDate(_ date: Date) -> String {
         return SlotTimeUtility.getSlotName(from: date)
+    }
+    
+    // デバイスのタイムゾーンを取得
+    private func getDeviceTimezone() -> TimeZone {
+        // DeviceManagerからタイムゾーンを取得
+        return deviceManager?.selectedDeviceTimezone ?? TimeZone.current
     }
     
     // 次のスロット切り替えまでの正確な秒数を計算
@@ -169,7 +179,8 @@ class AudioRecorder: NSObject, ObservableObject {
     // 現在のスロット用録音を開始
     @discardableResult
     private func startRecordingForCurrentSlot() -> Bool {
-        let dateString = SlotTimeUtility.getDateString(from: Date())
+        // デバイスのタイムゾーンを使用して日付文字列を生成
+        let dateString = SlotTimeUtility.getDateString(from: Date(), timezone: getDeviceTimezone())
         let fileName = "\(currentSlot).wav"
         let documentPath = getDocumentsDirectory()
         let dateDirectory = documentPath.appendingPathComponent(dateString)

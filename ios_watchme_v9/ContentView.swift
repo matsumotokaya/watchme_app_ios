@@ -16,6 +16,8 @@ struct ContentView: View {
     @StateObject private var viewState = ContentViewState()
     
     private func initializeNetworkManager() {
+        // AudioRecorderにDeviceManagerを設定
+        audioRecorder.deviceManager = deviceManager
         viewState.networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
         
         if let authUser = authManager.currentUser {

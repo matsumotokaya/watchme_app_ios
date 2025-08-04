@@ -70,6 +70,7 @@ CREATE TABLE devices (
     platform_identifier TEXT NOT NULL UNIQUE,
     device_type TEXT NOT NULL,
     platform_type TEXT NOT NULL,
+    timezone TEXT NOT NULL,  -- v9.17.0で追加（IANAタイムゾーン識別子）
     owner_user_id UUID REFERENCES auth.users(id),  -- 廃止予定
     subject_id UUID REFERENCES subjects(subject_id),  -- v9.14.0で追加
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -350,15 +351,122 @@ struct HomeView: View {
 - **一貫性**: ビュー間でのデータ同期の自動化
 - **拡張性**: 新しいグラフビューでも同じデータソースを利用可能
 
+## ライフログツールとしての設計思想 🎯
+
+### 観測対象中心の時間軸管理
+
+本アプリケーションは**ライフログツール**として、観測対象（デバイスを装着している人）の生活リズムを正確に記録することを最重要視しています。
+
+#### 基本原則
+
+1. **デバイス = 観測対象の時間軸**
+   - デバイスは特定の人（観測対象）の生活を記録する
+   - そのデバイスが設置されている場所のタイムゾーンが基準
+   - 観測対象が東京にいれば、朝7時の活動は「朝7時」として記録
+
+2. **アカウント所有者の位置は無関係**
+   - アカウント（ログインユーザー）は観測データを閲覧するだけ
+   - アカウント所有者がアメリカにいても、東京のデバイスのデータは東京時間で表示
+   - データの整合性と一貫性を保証
+
+3. **タイムゾーンの固定性**
+   - デバイスのタイムゾーンは登録時に設定され、基本的に変更されない
+   - 旅行などの一時的な移動では変更しない（ライフログの一貫性のため）
+   - 引っ越しなど恒久的な変更時のみ、設定から変更可能
+
+#### 実装における重要な決定
+
+- **データ保存**: デバイスのローカル時間で保存（UTCに変換しない）
+- **データ表示**: 常にデバイスのタイムゾーンで表示
+- **日付の境界**: デバイスのタイムゾーンでの0時が日付の境界
+
 ## API連携とデータフロー
+
+### データ処理パイプライン
+
+#### 1. 録音からグラフ表示までの完全なフロー
+
+```
+[iOS App] 
+  ↓ 録音（30分ごと、デバイスのローカル時間）
+  ↓
+[Vault API]
+  ↓ file_path生成: files/{device_id}/{date}/{time_slot}/audio.wav
+  ↓ recorded_at: タイムゾーン付きタイムスタンプ（※将来廃止予定）
+  ↓
+[S3 Storage]
+  ↓
+[Whisper API]
+  ↓ file_pathから日付とtime_blockを抽出
+  ↓ vibe_whisperテーブルに保存
+  ↓
+[ChatGPT API]
+  ↓ 感情分析とスコア生成
+  ↓
+[vibe_whisper_summary]
+  ↓ 日次集計データ（48スロット）
+  ↓
+[iOS App]
+  グラフ表示（デバイスのタイムゾーンで）
+```
+
+#### 2. file_pathの重要性と構造
+
+##### 現在の構造
+```
+files/{device_id}/{YYYY-MM-DD}/{HH-MM}/audio.wav
+```
+
+- **device_id**: デバイスの識別子
+- **YYYY-MM-DD**: デバイスのローカル日付
+- **HH-MM**: 30分スロット（00-00, 00-30, ..., 23-30）
+
+##### file_pathが信頼できる唯一の時間情報源である理由
+
+1. **録音時点で確定**: デバイスのローカル時間で生成
+2. **不変性**: 一度生成されたパスは変更されない
+3. **通信遅延の影響なし**: ネットワーク遅延があってもパスは正確
+4. **全処理で一貫**: Whisper、ChatGPT、グラフ表示まで同じパスを使用
+
+##### 今後の構造化計画
+
+```sql
+-- 将来的な audio_files テーブル構造
+CREATE TABLE audio_files (
+    device_id UUID NOT NULL,
+    local_date DATE NOT NULL,        -- デバイスのローカル日付
+    time_slot VARCHAR(5) NOT NULL,   -- "HH-MM" 形式
+    file_path TEXT NOT NULL,          -- 互換性のため残す
+    -- recorded_at は廃止
+    PRIMARY KEY (device_id, local_date, time_slot)
+);
+```
+
+**メリット**:
+- 高速なクエリ（日付・時間での検索が容易）
+- データの一貫性保証
+- タイムゾーン非依存で明確
+
+#### 3. recorded_atカラムの問題と廃止予定
+
+##### 現在の問題点
+- グラフ生成では**一切使用されていない**
+- 通信遅延により実際の録音時刻とずれる可能性
+- file_pathの情報と重複
+- 誤解を招く（使われていると思われがち）
+
+##### 廃止計画
+1. 短期: ドキュメントで非推奨として明記
+2. 中期: 新規データでは記録しない
+3. 長期: カラムを完全に削除
 
 ### データの流れ
 1. **音声録音** → デバイスローカルにWAV形式で保存
-2. **アップロード** → API経由でS3に保存（生音声）
-3. **Whisper処理** → 音声をテキストに変換
+2. **アップロード** → Vault API経由でS3に保存（file_path生成）
+3. **Whisper処理** → 音声をテキストに変換、file_pathから日付・時間を抽出
 4. **感情分析** → ChatGPTで感情スコアを生成
 5. **集計保存** → `vibe_whisper_summary`テーブルに日次サマリーを保存
-6. **データ取得** → アプリからデバイスIDで分析結果を照会
+6. **データ取得** → アプリからデバイスIDと日付で分析結果を照会
 
 ### 高速データ取得（RPC実装）
 
@@ -522,25 +630,75 @@ Parameters:
   }
 ```
 
-### タイムゾーン処理
+### タイムゾーン処理の実装詳細 （v9.17.0〜）
 
-本アプリケーションは、ユーザーのローカルタイムゾーンを基準として動作します：
+本アプリケーションは、**デバイスのタイムゾーンを中心とした設計**を採用しています：
 
-1. **録音時刻の記録**
-   - デバイスのローカルタイムゾーンで記録
-   - ISO 8601形式でタイムゾーンオフセットを含む（例：+09:00）
+#### 1. タイムゾーン管理の階層
 
-2. **タイムスタンプの送信**
-   ```swift
-   let isoFormatter = ISO8601DateFormatter()
-   isoFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
-   isoFormatter.timeZone = TimeZone.current  // 明示的にローカルタイムゾーンを設定
-   let recordedAtString = isoFormatter.string(from: recording.date)
-   ```
+```
+デバイス（観測対象の時間軸）
+    ↓
+DeviceManager（タイムゾーン管理）
+    ↓
+各UIコンポーネント（デバイスタイムゾーンで表示）
+```
 
-3. **重要な注意点**
-   - `ISO8601DateFormatter`はデフォルトでUTCを使用するため、明示的に`timeZone`プロパティを設定する必要があります
-   - サーバー側でもタイムゾーン情報を保持し、UTCに変換しないよう設定が必要です
+#### 2. DeviceManagerの拡張機能
+
+```swift
+// 選択中デバイスのタイムゾーン取得
+var selectedDeviceTimezone: TimeZone {
+    // devicesテーブルのtimezoneカラムから取得
+    // フォールバック: TimeZone.current
+}
+
+// デバイス用のCalendar生成
+var deviceCalendar: Calendar {
+    var calendar = Calendar.current
+    calendar.timeZone = selectedDeviceTimezone
+    return calendar
+}
+```
+
+#### 3. 実装された主要コンポーネントの修正
+
+##### DatePagingView / DateNavigationView
+- `Calendar.current`の使用を廃止
+- `deviceManager.deviceCalendar`を使用
+- 「今日」の判定もデバイスのタイムゾーンで実行
+
+##### SlotTimeUtility
+- UTC変換を削除
+- タイムゾーンパラメータを追加
+- デバイスのローカル時間でファイルパスを生成
+
+##### SupabaseDataManager
+- UTC変換を削除
+- `fetchAllReports`にタイムゾーンパラメータを追加
+- デバイスのタイムゾーンで日付文字列を生成
+
+##### DashboardViewModel
+- キャッシュキー生成でデバイスのタイムゾーンを使用
+- データ取得時にタイムゾーンを明示的に渡す
+
+#### 4. 録音時刻の記録
+
+```swift
+// AudioRecorderの実装
+private func getDeviceTimezone() -> TimeZone {
+    return deviceManager?.selectedDeviceTimezone ?? TimeZone.current
+}
+
+// ファイルパス生成時
+let dateString = SlotTimeUtility.getDateString(from: Date(), timezone: getDeviceTimezone())
+```
+
+#### 5. 重要な設計決定
+
+- **UTC変換の完全廃止**: データはデバイスのローカル時間で保存・処理
+- **Calendar.currentの使用禁止**: 常にデバイスのCalendarを使用
+- **タイムゾーンの明示的な管理**: 暗黙的なタイムゾーン使用を避ける
 
 ## 開発時の注意点
 
@@ -751,10 +909,50 @@ let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileU
 2. DeviceManagerがグローバルsupabaseクライアントを使用しているか確認
 3. checkAuthStatusでセッション復元が正しく行われているか確認
 
-### タイムゾーン関連
+### タイムゾーン関連の問題と解決策 （v9.17.0で改善）
 
-- **時刻がUTCで保存される**: `ISO8601DateFormatter`に明示的に`timeZone`を設定しているか確認
-- **S3パスが間違った時刻になる**: サーバー側でタイムゾーン情報を保持しているか確認
+#### 問題: 日付がずれる、異なるタイムゾーンのデバイスで表示がおかしい
+
+**原因と解決策**:
+
+1. **Calendar.currentの使用を確認**
+   - ❌ 問題: `Calendar.current`はiPhoneのタイムゾーン
+   - ✅ 解決: `deviceManager.deviceCalendar`を使用
+
+2. **UTC変換の確認**
+   - ❌ 問題: データをUTCに変換している
+   - ✅ 解決: デバイスのローカル時間のまま保存
+
+3. **デバイス切り替え時の問題**
+   - 確認: `DeviceManager.selectedDeviceTimezone`が正しく取得されているか
+   - 確認: 各Viewが`@EnvironmentObject`でDeviceManagerを参照しているか
+
+4. **データベースの確認**
+   ```sql
+   -- デバイスのタイムゾーンが設定されているか確認
+   SELECT device_id, timezone FROM devices WHERE device_id = 'your-device-id';
+   
+   -- タイムゾーンがNULLの場合は更新
+   UPDATE devices SET timezone = 'Asia/Tokyo' WHERE device_id = 'your-device-id';
+   ```
+
+5. **デバッグ方法**
+   ```swift
+   // 現在のデバイスタイムゾーンを確認
+   print("Device Timezone: \(deviceManager.selectedDeviceTimezone)")
+   
+   // キャッシュキーを確認（日付が正しいか）
+   print("Cache Key: \(makeCacheKey(deviceId: deviceId, date: date))")
+   ```
+
+#### 問題: file_pathの日付とグラフ表示の日付が一致しない
+
+**原因**: Vault APIでのfile_path生成時とiOSアプリでの表示時でタイムゾーンが異なる
+
+**解決策**:
+1. Vault APIが`recorded_at`のタイムゾーンを保持しているか確認
+2. file_pathの日付部分がデバイスのローカル日付になっているか確認
+3. iOS側で`SlotTimeUtility.getDateString`にタイムゾーンを渡しているか確認
 
 ### ビルドエラー
 

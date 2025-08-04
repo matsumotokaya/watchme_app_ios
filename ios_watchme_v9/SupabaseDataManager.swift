@@ -36,10 +36,11 @@ class SupabaseDataManager: ObservableObject {
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
     
     // 日付フォーマッター
+    // デバイスのローカル日付として保存されているため、タイムゾーン変換は不要
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
+        // タイムゾーン設定を削除（データはデバイスのローカル日付で保存されている）
         return formatter
     }()
     
@@ -51,11 +52,17 @@ class SupabaseDataManager: ObservableObject {
     // MARK: - Public Methods
     
     /// 特定の日付のレポートを取得
-    func fetchDailyReport(for deviceId: String, date: Date) async {
+    func fetchDailyReport(for deviceId: String, date: Date, timezone: TimeZone? = nil) async {
         // このメソッドはfetchAllReportsから呼ばれることを想定
         // エラー時はerrorMessageを設定し、UIに即座に反映させる
         
-        let dateString = dateFormatter.string(from: date)
+        // デバイスのタイムゾーンが指定されていればそれを使用
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let tz = timezone {
+            formatter.timeZone = tz
+        }
+        let dateString = formatter.string(from: date)
         print("📅 Fetching daily report for device: \(deviceId), date: \(dateString)")
         
         do {
@@ -152,7 +159,7 @@ class SupabaseDataManager: ObservableObject {
     }
     
     /// 統合データフェッチメソッド - RPCを使ってすべてのグラフデータを一括で取得（高速版）
-    func fetchAllReports(deviceId: String, date: Date) async {
+    func fetchAllReports(deviceId: String, date: Date, timezone: TimeZone? = nil) async {
         await MainActor.run { [weak self] in
             self?.isLoading = true
             self?.errorMessage = nil
@@ -163,7 +170,13 @@ class SupabaseDataManager: ObservableObject {
             self?.subject = nil
         }
 
-        let dateString = dateFormatter.string(from: date)
+        // デバイスのタイムゾーンが指定されていればそれを使用
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let tz = timezone {
+            formatter.timeZone = tz
+        }
+        let dateString = formatter.string(from: date)
         print("🚀 Fetching all reports via RPC for device: \(deviceId), date: \(dateString)")
 
         do {
